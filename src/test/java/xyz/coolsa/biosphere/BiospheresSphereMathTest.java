@@ -43,6 +43,32 @@ class BiospheresSphereMathTest {
     }
 
     @Test
+    void picksStableBiomeIndexFromSphereCoordinates() {
+        int first = BiospheresSphereMath.pickIndexForSphere(128, 256, 29);
+        int second = BiospheresSphereMath.pickIndexForSphere(128, 256, 29);
+
+        assertEquals(first, second);
+        assertTrue(first >= 0 && first < 29);
+    }
+
+    @Test
+    void picksDifferentBiomeIndicesForDifferentSphereCenters() {
+        int first = BiospheresSphereMath.pickIndexForSphere(0, 0, 29);
+        int second = BiospheresSphereMath.pickIndexForSphere(128, 0, 29);
+        int third = BiospheresSphereMath.pickIndexForSphere(0, 128, 29);
+
+        assertTrue(first != second || second != third || first != third);
+    }
+
+    @Test
+    void keepsSeededSphereCenterYInsideExpectedBounds() {
+        int y = BiospheresSphereMath.pickCenterYForSphere(128, 256, 32, -64, 384);
+
+        assertTrue(y >= 64);
+        assertTrue(y <= 192);
+    }
+
+    @Test
     void preservesTheCurrentLakeThresholds() {
         assertTrue(BiospheresSphereMath.hasLake(new MultiNoiseUtil.NoiseValuePoint(0L, 0L, 5L, 0L, 0L, 0L)));
         assertFalse(BiospheresSphereMath.hasLake(new MultiNoiseUtil.NoiseValuePoint(0L, 0L, 4L, 0L, 0L, 0L)));

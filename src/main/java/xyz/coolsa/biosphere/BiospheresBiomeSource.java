@@ -52,8 +52,7 @@ public final class BiospheresBiomeSource extends BiomeSource {
 
 		int centerX = BiospheresSphereMath.nearestCenter(x * 4, this.sphereDistance);
 		int centerZ = BiospheresSphereMath.nearestCenter(z * 4, this.sphereDistance);
-		MultiNoiseUtil.NoiseValuePoint point = noise.sample(centerX >> 2, y, centerZ >> 2);
-		int index = BiospheresSphereMath.pickIndex(point, this.biomes.size());
+		int index = BiospheresSphereMath.pickIndexForSphere(centerX, centerZ, this.biomes.size());
 		return this.biomes.get(index);
 	}
 

@@ -107,8 +107,7 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 	private BlockPos getNearestSphereCenter(NoiseConfig noiseConfig, int x, int z) {
 		int centerX = BiospheresSphereMath.nearestCenter(x, this.sphereDistance);
 		int centerZ = BiospheresSphereMath.nearestCenter(z, this.sphereDistance);
-		MultiNoiseUtil.NoiseValuePoint point = noiseConfig.getMultiNoiseSampler().sample(centerX >> 2, 0, centerZ >> 2);
-		int centerY = BiospheresSphereMath.pickCenterY(point, this.sphereRadius, this.minimumY, this.worldHeight);
+		int centerY = BiospheresSphereMath.pickCenterYForSphere(centerX, centerZ, this.sphereRadius, this.minimumY, this.worldHeight);
 		return new BlockPos(centerX, centerY, centerZ);
 	}
 
@@ -275,41 +274,40 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 		ChunkPos chunkPos = chunk.getPos();
 		BlockPos centerPos = this.getNearestSphereCenter(world.getSeed(), chunkPos.getCenterX(), chunkPos.getCenterZ());
 		BlockPos.Mutable current = new BlockPos.Mutable();
+		BlockPos[] closestSpheres = this.getClosestSpheres(world.getSeed(), centerPos);
 
-		for (int x = chunkPos.getStartX() - 7; x <= chunkPos.getEndX() + 7; x++) {
-			for (int z = chunkPos.getStartZ() - 7; z <= chunkPos.getEndZ() + 7; z++) {
+		for (int x = chunkPos.getStartX(); x <= chunkPos.getEndX(); x++) {
+			for (int z = chunkPos.getStartZ(); z <= chunkPos.getEndZ(); z++) {
 				double radialDistance = Math.sqrt(centerPos.getSquaredDistance(x, centerPos.getY(), z));
-				if (radialDistance > this.sphereRadius + 16) {
-					continue;
-				}
+				if (radialDistance <= this.sphereRadius + 16) {
+					double sphereHalfHeight = Math.sqrt((double) this.sphereRadius * this.sphereRadius
+						- (centerPos.getX() - x) * (double) (centerPos.getX() - x)
+						- (centerPos.getZ() - z) * (double) (centerPos.getZ() - z));
+					double largerSphereHalfHeight = Math.sqrt((double) (this.sphereRadius + 16) * (this.sphereRadius + 16)
+						- (centerPos.getX() - x) * (double) (centerPos.getX() - x)
+						- (centerPos.getZ() - z) * (double) (centerPos.getZ() - z));
 
-				double sphereHalfHeight = Math.sqrt((double) this.sphereRadius * this.sphereRadius
-					- (centerPos.getX() - x) * (double) (centerPos.getX() - x)
-					- (centerPos.getZ() - z) * (double) (centerPos.getZ() - z));
-				double largerSphereHalfHeight = Math.sqrt((double) (this.sphereRadius + 16) * (this.sphereRadius + 16)
-					- (centerPos.getX() - x) * (double) (centerPos.getX() - x)
-					- (centerPos.getZ() - z) * (double) (centerPos.getZ() - z));
+					for (int y = centerPos.getY() - (int) sphereHalfHeight; y <= centerPos.getY() + (int) sphereHalfHeight; y++) {
+						double newRadialDistance = Math.sqrt(centerPos.getSquaredDistance(x, y, z));
+						if (newRadialDistance <= this.sphereRadius - 1) {
+							continue;
+						}
 
-				for (int y = centerPos.getY() - (int) sphereHalfHeight; y <= centerPos.getY() + (int) sphereHalfHeight; y++) {
-					double newRadialDistance = Math.sqrt(centerPos.getSquaredDistance(x, y, z));
-					if (newRadialDistance <= this.sphereRadius - 1) {
-						continue;
+						BlockState blockState = y * (1.0D + (double) y / (double) centerPos.getY()) >= centerPos.getY()
+							? Blocks.GLASS.getDefaultState()
+							: this.defaultBlock;
+						world.setBlockState(current.set(x, y, z), blockState, 0);
 					}
 
-					BlockState blockState = y * (1.0D + (double) y / (double) centerPos.getY()) >= centerPos.getY()
-						? Blocks.GLASS.getDefaultState()
-						: this.defaultBlock;
-					world.setBlockState(current.set(x, y, z), blockState, 0);
-				}
-
-				for (int y = 0; y <= centerPos.getY() + (int) largerSphereHalfHeight; y++) {
-					double newRadialDistance = Math.sqrt(centerPos.getSquaredDistance(x, y, z));
-					if (newRadialDistance >= this.sphereRadius) {
-						world.setBlockState(current.set(x, y, z), Blocks.AIR.getDefaultState(), 0);
+					for (int y = 0; y <= centerPos.getY() + (int) largerSphereHalfHeight; y++) {
+						double newRadialDistance = Math.sqrt(centerPos.getSquaredDistance(x, y, z));
+						if (newRadialDistance >= this.sphereRadius) {
+							world.setBlockState(current.set(x, y, z), Blocks.AIR.getDefaultState(), 0);
+						}
 					}
 				}
 
-				this.makeBridges(new BlockPos(x, 0, z), centerPos, this.getClosestSpheres(world.getSeed(), centerPos), world, current);
+				this.makeBridges(new BlockPos(x, 0, z), centerPos, closestSpheres, world, current);
 			}
 		}
 	}
@@ -317,9 +315,7 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 	private BlockPos getNearestSphereCenter(long seed, int x, int z) {
 		int centerX = BiospheresSphereMath.nearestCenter(x, this.sphereDistance);
 		int centerZ = BiospheresSphereMath.nearestCenter(z, this.sphereDistance);
-		long mixed = seed ^ (centerX * 341873128712L) ^ (centerZ * 132897987541L);
-		MultiNoiseUtil.NoiseValuePoint point = new MultiNoiseUtil.NoiseValuePoint(0L, 0L, 0L, 0L, mixed, 0L);
-		int centerY = BiospheresSphereMath.pickCenterY(point, this.sphereRadius, this.minimumY, this.worldHeight);
+		int centerY = BiospheresSphereMath.pickCenterYForSphere(centerX, centerZ, this.sphereRadius, this.minimumY, this.worldHeight);
 		return new BlockPos(centerX, centerY, centerZ);
 	}
 
