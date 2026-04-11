@@ -1,17 +1,19 @@
 package xyz.coolsa.biosphere;
 
 import net.fabricmc.api.ModInitializer;
+import net.minecraft.registry.Registries;
+import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
-import net.minecraft.util.registry.Registry;
 
-public class Biospheres implements ModInitializer {
+public final class Biospheres implements ModInitializer {
+
+	public static final String MOD_ID = "biospheres";
+	public static final Identifier CHUNK_GENERATOR_ID = Identifier.of(MOD_ID, "biosphere");
+	public static final Identifier BIOME_SOURCE_ID = Identifier.of(MOD_ID, "sphere_biomes");
+
 	@Override
 	public void onInitialize() {
-		// This code runs as soon as Minecraft is in a mod-load-ready state.
-		// However, some things (like resources) may still be uninitialized.
-		// Proceed with mild caution.
-		Registry.register(Registry.CHUNK_GENERATOR, new Identifier("coolsa","biosphere"), BiospheresChunkGenerator.CODEC);
-		Registry.register(Registry.BIOME_SOURCE, new Identifier("coolsa","biosphere_biomes"), BiospheresBiomeSource.CODEC);
-		System.out.println("Loaded Biospheres Mod!");
+		Registry.register(Registries.CHUNK_GENERATOR, CHUNK_GENERATOR_ID, BiospheresChunkGenerator.CODEC);
+		Registry.register(Registries.BIOME_SOURCE, BIOME_SOURCE_ID, BiospheresBiomeSource.CODEC);
 	}
 }

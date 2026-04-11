@@ -1,167 +1,83 @@
 package xyz.coolsa.biosphere;
 
-import java.util.List;
-import java.util.Map;
-import java.util.function.BiFunction;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-
-import com.google.common.base.Optional;
-import com.google.common.collect.ImmutableList;
-import com.mojang.datafixers.kinds.App;
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-
-import net.minecraft.block.Blocks;
+import net.minecraft.registry.RegistryKeys;
+import net.minecraft.registry.entry.RegistryFixedCodec;
+import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.util.Identifier;
-import com.mojang.datafixers.util.Pair;
-
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.util.registry.BuiltinRegistries;
-import net.minecraft.util.registry.Registry;
 import net.minecraft.world.biome.Biome;
-import net.minecraft.world.biome.BiomeKeys;
-import net.minecraft.world.biome.BuiltinBiomes;
-//import net.minecraft.world.biome.Biomes;
-//import net.minecraft.world.biome.BuiltinBiomes;
-import net.minecraft.world.biome.layer.BiomeLayers;
-import net.minecraft.world.biome.source.BiomeLayerSampler;
 import net.minecraft.world.biome.source.BiomeSource;
-import net.minecraft.world.biome.source.MultiNoiseBiomeSource;
-import net.minecraft.world.gen.ChunkRandom;
-import net.minecraft.world.gen.GenerationStep;
-import net.minecraft.world.gen.decorator.Decorator;
-import net.minecraft.world.gen.decorator.RangeDecoratorConfig;
-import net.minecraft.world.gen.feature.Feature;
-import net.minecraft.world.gen.feature.OreFeatureConfig;
+import net.minecraft.world.biome.source.util.MultiNoiseUtil;
 
-public class BiospheresBiomeSource extends BiomeSource {
+import java.util.List;
+import java.util.stream.Stream;
 
-	public static final Codec<BiospheresBiomeSource> CODEC = RecordCodecBuilder
-			.create((instance) -> instance.group(Codec.LONG.fieldOf("seed").forGetter((generator) -> generator.seed))
-					.apply(instance, instance.stable(BiospheresBiomeSource::new)));
-	protected final long seed;
-	protected final int sphereDistance;
-	protected final int sphereRadius;
-	protected final ChunkRandom chunkRandom;
-////	protected final long seed;
-////	protected final int squareSize;
-////	protected final int curveSize;
-////	private final BiomeLayerSampler biomeSampler;
-	protected static final List<Biome> BIOMES = ImmutableList.<Biome>of(BuiltinBiomes.PLAINS,
-//			BuiltinBiomes.PLAINS
-			BuiltinRegistries.BIOME.get(BiomeKeys.OCEAN), BuiltinRegistries.BIOME.get(BiomeKeys.DESERT),
-			BuiltinRegistries.BIOME.get(BiomeKeys.MOUNTAINS), BuiltinRegistries.BIOME.get(BiomeKeys.FOREST),
-			BuiltinRegistries.BIOME.get(BiomeKeys.TAIGA), BuiltinRegistries.BIOME.get(BiomeKeys.SWAMP),
-			BuiltinRegistries.BIOME.get(BiomeKeys.RIVER), BuiltinRegistries.BIOME.get(BiomeKeys.FROZEN_OCEAN),
-			BuiltinRegistries.BIOME.get(BiomeKeys.FROZEN_RIVER),
-			BuiltinRegistries.BIOME.get(BiomeKeys.MUSHROOM_FIELDS),
-			BuiltinRegistries.BIOME.get(BiomeKeys.MUSHROOM_FIELD_SHORE),
-			BuiltinRegistries.BIOME.get(BiomeKeys.BEACH), BuiltinRegistries.BIOME.get(BiomeKeys.DESERT_HILLS),
-			BuiltinRegistries.BIOME.get(BiomeKeys.WOODED_HILLS),
-			BuiltinRegistries.BIOME.get(BiomeKeys.TAIGA_HILLS),
-			BuiltinRegistries.BIOME.get(BiomeKeys.MOUNTAIN_EDGE), BuiltinRegistries.BIOME.get(BiomeKeys.JUNGLE),
-			BuiltinRegistries.BIOME.get(BiomeKeys.JUNGLE_HILLS),
-			BuiltinRegistries.BIOME.get(BiomeKeys.JUNGLE_EDGE),
-			BuiltinRegistries.BIOME.get(BiomeKeys.DEEP_OCEAN),
-			BuiltinRegistries.BIOME.get(BiomeKeys.STONE_SHORE),
-			BuiltinRegistries.BIOME.get(BiomeKeys.BIRCH_FOREST),
-			BuiltinRegistries.BIOME.get(BiomeKeys.BIRCH_FOREST_HILLS),
-			BuiltinRegistries.BIOME.get(BiomeKeys.DARK_FOREST),
-			BuiltinRegistries.BIOME.get(BiomeKeys.GIANT_TREE_TAIGA),
-			BuiltinRegistries.BIOME.get(BiomeKeys.GIANT_TREE_TAIGA_HILLS),
-			BuiltinRegistries.BIOME.get(BiomeKeys.WOODED_MOUNTAINS),
-			BuiltinRegistries.BIOME.get(BiomeKeys.SAVANNA),
-			BuiltinRegistries.BIOME.get(BiomeKeys.SAVANNA_PLATEAU),
-			BuiltinRegistries.BIOME.get(BiomeKeys.BADLANDS),
-			BuiltinRegistries.BIOME.get(BiomeKeys.WOODED_BADLANDS_PLATEAU),
-			BuiltinRegistries.BIOME.get(BiomeKeys.BADLANDS_PLATEAU),
-			BuiltinRegistries.BIOME.get(BiomeKeys.WARM_OCEAN),
-			BuiltinRegistries.BIOME.get(BiomeKeys.LUKEWARM_OCEAN),
-			BuiltinRegistries.BIOME.get(BiomeKeys.COLD_OCEAN),
-			BuiltinRegistries.BIOME.get(BiomeKeys.DEEP_WARM_OCEAN),
-			BuiltinRegistries.BIOME.get(BiomeKeys.DEEP_LUKEWARM_OCEAN),
-			BuiltinRegistries.BIOME.get(BiomeKeys.DEEP_COLD_OCEAN),
-			BuiltinRegistries.BIOME.get(BiomeKeys.SUNFLOWER_PLAINS),
-			BuiltinRegistries.BIOME.get(BiomeKeys.DESERT_LAKES),
-			BuiltinRegistries.BIOME.get(BiomeKeys.GRAVELLY_MOUNTAINS),
-			BuiltinRegistries.BIOME.get(BiomeKeys.FLOWER_FOREST),
-			BuiltinRegistries.BIOME.get(BiomeKeys.TAIGA_MOUNTAINS),
-			BuiltinRegistries.BIOME.get(BiomeKeys.SWAMP_HILLS),
-			BuiltinRegistries.BIOME.get(BiomeKeys.ICE_SPIKES),
-			BuiltinRegistries.BIOME.get(BiomeKeys.MODIFIED_JUNGLE),
-			BuiltinRegistries.BIOME.get(BiomeKeys.MODIFIED_JUNGLE_EDGE),
-			BuiltinRegistries.BIOME.get(BiomeKeys.TALL_BIRCH_FOREST),
-			BuiltinRegistries.BIOME.get(BiomeKeys.TALL_BIRCH_HILLS),
-			BuiltinRegistries.BIOME.get(BiomeKeys.DARK_FOREST_HILLS),
-			BuiltinRegistries.BIOME.get(BiomeKeys.GIANT_SPRUCE_TAIGA),
-			BuiltinRegistries.BIOME.get(BiomeKeys.GIANT_SPRUCE_TAIGA_HILLS),
-			BuiltinRegistries.BIOME.get(BiomeKeys.MODIFIED_GRAVELLY_MOUNTAINS),
-			BuiltinRegistries.BIOME.get(BiomeKeys.SHATTERED_SAVANNA),
-			BuiltinRegistries.BIOME.get(BiomeKeys.SHATTERED_SAVANNA_PLATEAU),
-			BuiltinRegistries.BIOME.get(BiomeKeys.ERODED_BADLANDS),
-			BuiltinRegistries.BIOME.get(BiomeKeys.MODIFIED_WOODED_BADLANDS_PLATEAU),
-			BuiltinRegistries.BIOME.get(BiomeKeys.MODIFIED_BADLANDS_PLATEAU)
-			);
+public final class BiospheresBiomeSource extends BiomeSource {
+	public static final MapCodec<BiospheresBiomeSource> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
+		RegistryFixedCodec.of(RegistryKeys.BIOME).listOf().fieldOf("biomes").forGetter(BiospheresBiomeSource::getSphereBiomes),
+		RegistryFixedCodec.of(RegistryKeys.BIOME).fieldOf("void_biome").forGetter(BiospheresBiomeSource::getVoidBiome),
+		Codec.INT.optionalFieldOf("sphere_distance", 128).forGetter(BiospheresBiomeSource::getSphereDistance),
+		Codec.INT.optionalFieldOf("sphere_radius", 32).forGetter(BiospheresBiomeSource::getSphereRadius)
+	).apply(instance, BiospheresBiomeSource::new));
 
-////	public static final Codec<BiosphereBiomeSource> CODEC = Codec.mapPair(Identifier.CODEC.flatXmap(
-////			identifier -> Optional.<MultiNoiseBiomeSource.Preset>ofNullable(this.Preset.field_24724.get(identifier))
-////					.map(DataResult::success).orElseGet(() -> DataResult.error("Unknown preset: " + identifier)),
-//BuiltinRegistries.BIOME.get(BuiltinBiomesreset -> DataResult.success(preset.id)).fieldOf("preset"), Codec.LONG.fieldOf("seed")).stable();
-//
-	protected BiospheresBiomeSource(long seed) {
-		super(BIOMES);
-		this.seed = seed;
-		this.sphereDistance = 128;
-		this.sphereRadius = 32;
-		this.chunkRandom = new ChunkRandom(seed);
-		// TODO Auto-generated constructor stub
+	private final List<RegistryEntry<Biome>> biomes;
+	private final RegistryEntry<Biome> voidBiome;
+	private final int sphereDistance;
+	private final int sphereRadius;
+
+	public BiospheresBiomeSource(List<RegistryEntry<Biome>> biomes, RegistryEntry<Biome> voidBiome, int sphereDistance, int sphereRadius) {
+		this.biomes = List.copyOf(biomes);
+		this.voidBiome = voidBiome;
+		this.sphereDistance = sphereDistance;
+		this.sphereRadius = sphereRadius;
 	}
 
 	@Override
-	public Biome getBiomeForNoiseGen(int biomeX, int biomeY, int biomeZ) {
-//		if(biomeX < 0) biomeX++;
-//		if(biomeZ < 0) biomeZ++;
-//		if (Math.abs(biomeX) - 6 > ((squareSize + curveSize) / 8)
-//				|| Math.abs(biomeZ) - 6 > ((squareSize + curveSize) / 8))
-////		System.out.println("AAAAAAAAAA");
+	protected MapCodec<? extends BiomeSource> getCodec() {
+		return CODEC;
+	}
 
-//		BlockPos centerPos 
-		if (this.getDistanceFromSphere(biomeX + 1, biomeZ + 1) < this.sphereRadius + 6) {
-			return this.getBiomeForSphere(biomeX, biomeZ);
+	@Override
+	protected Stream<RegistryEntry<Biome>> biomeStream() {
+		return Stream.concat(this.biomes.stream(), Stream.of(this.voidBiome)).distinct();
+	}
+
+	@Override
+	public RegistryEntry<Biome> getBiome(int x, int y, int z, MultiNoiseUtil.MultiNoiseSampler noise) {
+		if (!BiospheresSphereMath.isInsideSphereBand(x, z, this.sphereDistance, this.sphereRadius, 6)) {
+			return this.voidBiome;
 		}
-		return BuiltinBiomes.THE_VOID;
-//		return this.biomeSampler.sample(biomeX, biomeZ);
-//		return Biomes.OCEAN;
+
+		int centerX = BiospheresSphereMath.nearestCenter(x * 4, this.sphereDistance);
+		int centerZ = BiospheresSphereMath.nearestCenter(z * 4, this.sphereDistance);
+		MultiNoiseUtil.NoiseValuePoint point = noise.sample(centerX >> 2, y, centerZ >> 2);
+		int index = BiospheresSphereMath.pickIndex(point, this.biomes.size());
+		return this.biomes.get(index);
 	}
 
-	public double getDistanceFromSphere(int biomeX, int biomeZ) {
-		int centerX = (int) Math.round(biomeX * 4 / (double) this.sphereDistance) * this.sphereDistance;
-		int centerZ = (int) Math.round(biomeZ * 4 / (double) this.sphereDistance) * this.sphereDistance;
-		this.chunkRandom.setTerrainSeed(centerX, centerZ);
-		BlockPos center = new BlockPos(centerX, 0, centerZ);
-		return Math.sqrt(center.getSquaredDistance(biomeX * 4, 0, biomeZ * 4, true));
+	public List<RegistryEntry<Biome>> getSphereBiomes() {
+		return this.biomes;
 	}
 
-	public Biome getBiomeForSphere(int biomeX, int biomeZ) {
-		int centerX = (int) Math.round(biomeX * 4 / (double) this.sphereDistance) * this.sphereDistance;
-		int centerZ = (int) Math.round(biomeZ * 4 / (double) this.sphereDistance) * this.sphereDistance;
-		this.chunkRandom.setTerrainSeed(centerX, centerZ);
-		int randomChoice = this.chunkRandom.nextInt(BiospheresBiomeSource.BIOMES.size());
-		return BiospheresBiomeSource.BIOMES.get(randomChoice);
+	public RegistryEntry<Biome> getVoidBiome() {
+		return this.voidBiome;
 	}
 
-	@Override
-	public BiomeSource withSeed(long seed) {
-		return new BiospheresBiomeSource(seed);
-		// TODO Auto-generated method stub
-//		return new BiosphereBiomeSource(seed, this.squareSize, this.curveSize);
+	public int getSphereDistance() {
+		return this.sphereDistance;
 	}
 
-	@Override
-	protected Codec<? extends BiomeSource> getCodec() {
-		// TODO Auto-generated method stub
-		return BiospheresBiomeSource.CODEC;
+	public int getSphereRadius() {
+		return this.sphereRadius;
+	}
+
+	public List<Identifier> getBiomeIds() {
+		return this.biomes.stream().map(entry -> entry.getKeyOrValue().left().orElseThrow().getValue()).toList();
+	}
+
+	public Identifier getVoidBiomeId() {
+		return this.voidBiome.getKeyOrValue().left().orElseThrow().getValue();
 	}
 }

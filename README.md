@@ -1,18 +1,22 @@
 # Biospheres (Fabric)
 
-![Image](https://media.discordapp.net/attachments/720484491390615613/725637966881620019/unknown.png)
+This is a recreation of Risugami's original Biospheres mod for Fabric.
 
-## Setup
+## Target version
 
-For setup instructions please see the [fabric wiki page](https://fabricmc.net/wiki/tutorial:setup) that relates to the IDE that you are using.
+This project targets Minecraft `1.21.11` on Fabric Loader `0.19.1` with Fabric API `0.141.3+1.21.11`.
 
-## Information
+## World creation
 
-This is a recreation of [Risugami's original biosphere's mod](https://www.minecraftforum.net/forums/mapping-and-modding-java-edition/minecraft-mods/1272333-risugamis-mods-updated).
+Create a new world and pick `Biospheres` from the world preset list.
 
-It is made for Minecraft 1.16.1 and above.
+## Dedicated server
 
-This is not a Forge mod, however there does [exist a Forge version of this mod created by harryyoud.](https://github.com/harryyoud/biospheres)
+Set `level-type=biospheres:biospheres` in `server.properties` before generating a new world.
+
+## Development
+
+Use `./gradlew.bat build` to build the mod and `./gradlew.bat runClient` or `./gradlew.bat runServer` to test it.
 
 ## License
 

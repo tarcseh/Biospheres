@@ -2,33 +2,26 @@
   "schemaVersion": 1,
   "id": "biospheres",
   "version": "${version}",
-
   "name": "Biospheres",
-  "description": "Based off the original mod by Risugami, but implimemented with fabric",
+  "description": "Based on the original mod by Risugami, implemented with Fabric.",
   "authors": [
     "Coolsa"
   ],
   "contact": {
-    "homepage": "",
     "sources": "https://github.com/coolsa/Modfest1.16"
   },
-
   "license": "CC BY-SA 4.0",
-  "icon": "assets/modid/icon.png",
-
+  "icon": "assets/biospheres/icon.png",
   "environment": "*",
   "entrypoints": {
     "main": [
       "xyz.coolsa.biosphere.Biospheres"
     ]
   },
-
   "depends": {
-    "fabricloader": ">=0.7.4",
-    "fabric": "*",
-    "minecraft": "1.16.x"
-  },
-  "suggests": {
-    "flamingo": "*"
+    "fabricloader": ">=0.19.1",
+    "fabric-api": "*",
+    "minecraft": "1.21.11",
+    "java": ">=21"
   }
 }
