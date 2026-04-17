@@ -11,13 +11,18 @@ public final class BiospheresSphereMath {
     }
 
     public static boolean isInsideSphereBand(int biomeX, int biomeZ, int sphereDistance, int sphereRadius, int extraRadius) {
+        return isInsideSphereBand(biomeX, biomeZ, sphereDistance, sphereRadius, sphereRadius, extraRadius);
+    }
+
+    public static boolean isInsideSphereBand(int biomeX, int biomeZ, int sphereDistance, int minRadius, int maxRadius, int extraRadius) {
         int blockX = biomeX * 4;
         int blockZ = biomeZ * 4;
         int centerX = nearestCenter(blockX, sphereDistance);
         int centerZ = nearestCenter(blockZ, sphereDistance);
+        int radius = pickRadiusForSphere(centerX, centerZ, minRadius, maxRadius);
         double dx = centerX - blockX;
         double dz = centerZ - blockZ;
-        return Math.sqrt(dx * dx + dz * dz) < sphereRadius + extraRadius;
+        return Math.sqrt(dx * dx + dz * dz) < radius + extraRadius;
     }
 
     public static int pickIndex(MultiNoiseUtil.NoiseValuePoint point, int count) {
@@ -31,6 +36,16 @@ public final class BiospheresSphereMath {
     public static int pickIndexForSphere(int centerX, int centerZ, int count) {
         long mixed = mixSphereSeed(centerX, centerZ);
         return Math.floorMod(mixed, count);
+    }
+
+    public static int pickRadiusForSphere(int centerX, int centerZ, int minRadius, int maxRadius) {
+        if (maxRadius < minRadius) {
+            throw new IllegalArgumentException("maxRadius must be >= minRadius");
+        }
+
+        long mixed = mixSphereSeed(centerX, centerZ);
+        int radiusSpan = maxRadius - minRadius + 1;
+        return minRadius + Math.floorMod(mixed, radiusSpan);
     }
 
     public static int pickCenterY(MultiNoiseUtil.NoiseValuePoint point, int sphereRadius, int minimumY, int worldHeight) {

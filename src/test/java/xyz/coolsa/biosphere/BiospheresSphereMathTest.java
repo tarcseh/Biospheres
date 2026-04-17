@@ -69,6 +69,24 @@ class BiospheresSphereMathTest {
     }
 
     @Test
+    void picksStableRadiusForSphereCoordinates() {
+        int first = BiospheresSphereMath.pickRadiusForSphere(128, 256, 20, 160);
+        int second = BiospheresSphereMath.pickRadiusForSphere(128, 256, 20, 160);
+
+        assertEquals(first, second);
+        assertTrue(first >= 20);
+        assertTrue(first <= 160);
+    }
+
+    @Test
+    void supportsRaisedMaximumRadiusWhenPoliciesNeedIt() {
+        int radius = BiospheresSphereMath.pickRadiusForSphere(128, 256, 20, 224);
+
+        assertTrue(radius >= 20);
+        assertTrue(radius <= 224);
+    }
+
+    @Test
     void preservesTheCurrentLakeThresholds() {
         assertTrue(BiospheresSphereMath.hasLake(new MultiNoiseUtil.NoiseValuePoint(0L, 0L, 5L, 0L, 0L, 0L)));
         assertFalse(BiospheresSphereMath.hasLake(new MultiNoiseUtil.NoiseValuePoint(0L, 0L, 4L, 0L, 0L, 0L)));
