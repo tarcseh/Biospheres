@@ -1,6 +1,7 @@
 package xyz.coolsa.biosphere;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.DataResult;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.registry.RegistryKeys;
@@ -15,23 +16,73 @@ import java.util.List;
 import java.util.stream.Stream;
 
 public final class BiospheresBiomeSource extends BiomeSource {
-	public static final MapCodec<BiospheresBiomeSource> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
-		RegistryFixedCodec.of(RegistryKeys.BIOME).listOf().fieldOf("biomes").forGetter(BiospheresBiomeSource::getSphereBiomes),
-		RegistryFixedCodec.of(RegistryKeys.BIOME).fieldOf("void_biome").forGetter(BiospheresBiomeSource::getVoidBiome),
-		Codec.INT.optionalFieldOf("sphere_distance", 128).forGetter(BiospheresBiomeSource::getSphereDistance),
-		Codec.INT.optionalFieldOf("sphere_radius", 32).forGetter(BiospheresBiomeSource::getSphereRadius)
-	).apply(instance, BiospheresBiomeSource::new));
+	public static final MapCodec<BiospheresBiomeSource> CODEC = CodecData.CODEC.xmap(
+		data -> new BiospheresBiomeSource(data.biomes(), data.voidBiome(), data.sphereDistance(), data.minSphereRadius(), data.maxSphereRadius()),
+		BiospheresBiomeSource::toCodecData
+	);
+
+	public static final class CodecData {
+		public static final MapCodec<CodecData> CODEC = RecordCodecBuilder.<CodecData>mapCodec(instance -> instance.group(
+			RegistryFixedCodec.of(RegistryKeys.BIOME).listOf().fieldOf("biomes").forGetter(CodecData::biomes),
+			RegistryFixedCodec.of(RegistryKeys.BIOME).fieldOf("void_biome").forGetter(CodecData::voidBiome),
+			Codec.INT.optionalFieldOf("sphere_distance", 128).forGetter(CodecData::sphereDistance),
+			Codec.INT.optionalFieldOf("min_sphere_radius", 20).forGetter(CodecData::minSphereRadius),
+			Codec.INT.optionalFieldOf("max_sphere_radius", 160).forGetter(CodecData::maxSphereRadius)
+		).apply(instance, CodecData::new)).validate(data -> {
+			if (data.maxSphereRadius < data.minSphereRadius) {
+				return DataResult.error(() -> "max_sphere_radius must be >= min_sphere_radius");
+			}
+
+			return DataResult.success(data);
+		});
+
+		private final List<RegistryEntry<Biome>> biomes;
+		private final RegistryEntry<Biome> voidBiome;
+		private final int sphereDistance;
+		private final int minSphereRadius;
+		private final int maxSphereRadius;
+
+		public CodecData(List<RegistryEntry<Biome>> biomes, RegistryEntry<Biome> voidBiome, int sphereDistance, int minSphereRadius, int maxSphereRadius) {
+			this.biomes = List.copyOf(biomes);
+			this.voidBiome = voidBiome;
+			this.sphereDistance = sphereDistance;
+			this.minSphereRadius = minSphereRadius;
+			this.maxSphereRadius = maxSphereRadius;
+		}
+
+		public List<RegistryEntry<Biome>> biomes() {
+			return this.biomes;
+		}
+
+		public RegistryEntry<Biome> voidBiome() {
+			return this.voidBiome;
+		}
+
+		public int sphereDistance() {
+			return this.sphereDistance;
+		}
+
+		public int minSphereRadius() {
+			return this.minSphereRadius;
+		}
+
+		public int maxSphereRadius() {
+			return this.maxSphereRadius;
+		}
+	}
 
 	private final List<RegistryEntry<Biome>> biomes;
 	private final RegistryEntry<Biome> voidBiome;
 	private final int sphereDistance;
-	private final int sphereRadius;
+	private final int minSphereRadius;
+	private final int maxSphereRadius;
 
-	public BiospheresBiomeSource(List<RegistryEntry<Biome>> biomes, RegistryEntry<Biome> voidBiome, int sphereDistance, int sphereRadius) {
+	public BiospheresBiomeSource(List<RegistryEntry<Biome>> biomes, RegistryEntry<Biome> voidBiome, int sphereDistance, int minSphereRadius, int maxSphereRadius) {
 		this.biomes = List.copyOf(biomes);
 		this.voidBiome = voidBiome;
 		this.sphereDistance = sphereDistance;
-		this.sphereRadius = sphereRadius;
+		this.minSphereRadius = minSphereRadius;
+		this.maxSphereRadius = maxSphereRadius;
 	}
 
 	@Override
@@ -46,7 +97,7 @@ public final class BiospheresBiomeSource extends BiomeSource {
 
 	@Override
 	public RegistryEntry<Biome> getBiome(int x, int y, int z, MultiNoiseUtil.MultiNoiseSampler noise) {
-		if (!BiospheresSphereMath.isInsideSphereBand(x, z, this.sphereDistance, this.sphereRadius, 6)) {
+		if (!BiospheresSphereMath.isInsideSphereBand(x, z, this.sphereDistance, this.minSphereRadius, this.maxSphereRadius, 6)) {
 			return this.voidBiome;
 		}
 
@@ -68,8 +119,12 @@ public final class BiospheresBiomeSource extends BiomeSource {
 		return this.sphereDistance;
 	}
 
-	public int getSphereRadius() {
-		return this.sphereRadius;
+	public int getMinSphereRadius() {
+		return this.minSphereRadius;
+	}
+
+	public int getMaxSphereRadius() {
+		return this.maxSphereRadius;
 	}
 
 	public List<Identifier> getBiomeIds() {
@@ -78,5 +133,9 @@ public final class BiospheresBiomeSource extends BiomeSource {
 
 	public Identifier getVoidBiomeId() {
 		return this.voidBiome.getKeyOrValue().left().orElseThrow().getValue();
+	}
+
+	private static CodecData toCodecData(BiospheresBiomeSource source) {
+		return new CodecData(source.biomes, source.voidBiome, source.sphereDistance, source.minSphereRadius, source.maxSphereRadius);
 	}
 }
