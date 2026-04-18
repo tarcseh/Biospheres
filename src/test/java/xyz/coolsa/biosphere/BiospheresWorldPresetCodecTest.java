@@ -24,6 +24,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BiospheresWorldPresetCodecTest {
 
@@ -80,6 +81,7 @@ class BiospheresWorldPresetCodecTest {
 			.getAsJsonObject("minecraft:overworld")
 			.getAsJsonObject("generator");
 
+		assertTrue(generator.getAsJsonObject().get("max_sphere_radius").getAsInt() >= BiospheresStructureBoundsCatalog.largestRequiredHorizontalRadius());
 		assertEquals(20, generator.getAsJsonObject().get("min_sphere_radius").getAsInt());
 		assertEquals(160, generator.getAsJsonObject().get("max_sphere_radius").getAsInt());
 	}
