@@ -10,9 +10,16 @@ Minecraft `1.21.11` on Fabric Loader `0.19.1` with Fabric API `0.141.3+1.21.11`.
 
 Create a new world and select `Biospheres` from the world preset list.
 
+For the original smaller sphere experience (from the master branch), select `Biospheres Legacy` which uses:
+- Fixed 32-block sphere radius (instead of variable 160-224)
+- 128-block sphere spacing (instead of 480)
+- Smaller, more frequent spheres
+
 ## Dedicated server
 
 Set `level-type=biospheres:biospheres` in `server.properties` before generating a new world.
+
+For the legacy generation, use `level-type=biospheres:biospheres_legacy`.
 
 ## Development
 

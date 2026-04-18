@@ -1,6 +1,7 @@
 {
   "replace": false,
   "values": [
-    "biospheres:biospheres"
+    "biospheres:biospheres",
+    "biospheres:biospheres_legacy"
   ]
 }
