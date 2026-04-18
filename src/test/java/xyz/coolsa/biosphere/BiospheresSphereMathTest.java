@@ -97,4 +97,25 @@ class BiospheresSphereMathTest {
         assertEquals(64, BiospheresSphereMath.bridgeGap(0, 384, 160, 160));
         assertEquals(166, BiospheresSphereMath.bridgeGap(0, 384, 80, 138));
     }
+
+    @Test
+    void computesBridgeProgressFromTheShellBoundary() {
+        assertEquals(0, BiospheresSphereMath.bridgeProgress(320, 160, 160, 384));
+        assertEquals(32, BiospheresSphereMath.bridgeProgress(352, 160, 160, 384));
+        assertEquals(64, BiospheresSphereMath.bridgeProgress(384, 160, 160, 384));
+    }
+
+    @Test
+    void computesBridgeShellAnchorsFromBothSpheres() {
+        assertEquals(320, BiospheresSphereMath.bridgeStartCoord(160, 160, 384));
+        assertEquals(224, BiospheresSphereMath.bridgeEndCoord(384, 160, 160));
+        assertEquals(304, BiospheresSphereMath.bridgeEndCoord(384, 80, 160));
+    }
+
+    @Test
+    void interpolatesBridgeHeightAcrossTheWholeSpan() {
+        assertEquals(100, BiospheresSphereMath.interpolateBridgeY(100, 132, 320, 384, 320));
+        assertEquals(116, BiospheresSphereMath.interpolateBridgeY(100, 132, 320, 384, 352));
+        assertEquals(132, BiospheresSphereMath.interpolateBridgeY(100, 132, 320, 384, 384));
+    }
 }

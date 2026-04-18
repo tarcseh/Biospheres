@@ -95,8 +95,19 @@ public final class BiospheresStructureRouting {
 		if (family.isEmpty()) {
 			return true;
 		}
-		if (family.get() == BiospheresStructureFamily.STRONGHOLD || family.get() == BiospheresStructureFamily.MINESHAFT) {
-			return true;
+		if (family.get() == BiospheresStructureFamily.VILLAGE) {
+			return sphere.radius() >= 144 && this.canPlaceProjectedBounds(family.get(), sphere, projectedBox);
+		}
+		if (family.get() == BiospheresStructureFamily.WOODLAND_MANSION) {
+			return sphere.radius() >= 128 && this.canPlaceProjectedBounds(family.get(), sphere, projectedBox);
+		}
+		if (family.get() == BiospheresStructureFamily.MINESHAFT) {
+			return projectedBox.getMinY() >= sphere.centerY() - sphere.radius()
+				&& projectedBox.getMaxY() <= sphere.centerY() + sphere.radius();
+		}
+		if (family.get() == BiospheresStructureFamily.STRONGHOLD) {
+			return projectedBox.getMinY() >= sphere.centerY() - sphere.radius()
+				&& projectedBox.getMaxY() <= sphere.centerY() + sphere.radius();
 		}
 		return this.canPlaceProjectedBounds(family.get(), sphere, projectedBox);
 	}

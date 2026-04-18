@@ -52,17 +52,42 @@ class BiospheresStructureRoutingTest {
 
 	@Test
 	void allowsStrongholdsToPreserveVanillaLocateBehavior() {
-		BiospheresSphereDescriptor sphere = new BiospheresSphereDescriptor(0, 100, 0, 72, 73, 70, 16);
-		BlockBox projectedBox = new BlockBox(-200, -64, -200, 200, 256, 200);
+		BiospheresSphereDescriptor sphere = new BiospheresSphereDescriptor(0, 100, 0, 96, 97, 94, 16);
+		BlockBox projectedBox = new BlockBox(-40, 16, -40, 40, 184, 40);
 
 		assertTrue(BiospheresStructureRouting.defaultRouting().canAccept(Identifier.of("minecraft", "stronghold"), projectedBox, sphere));
 	}
 
 	@Test
+	void rejectsStrongholdsWhoseProjectedBoundsDropFarBelowTheSphere() {
+		BiospheresSphereDescriptor sphere = new BiospheresSphereDescriptor(0, 100, 0, 96, 97, 94, 16);
+		BlockBox projectedBox = new BlockBox(-40, -96, -40, 40, 40, 40);
+
+		assertFalse(BiospheresStructureRouting.defaultRouting().canAccept(Identifier.of("minecraft", "stronghold"), projectedBox, sphere));
+	}
+
+	@Test
 	void allowsMineshaftsToPreserveVanillaLocateBehavior() {
-		BiospheresSphereDescriptor sphere = new BiospheresSphereDescriptor(0, 100, 0, 72, 73, 70, 16);
-		BlockBox projectedBox = new BlockBox(-200, -64, -200, 200, 256, 200);
+		BiospheresSphereDescriptor sphere = new BiospheresSphereDescriptor(0, 100, 0, 96, 97, 94, 16);
+		BlockBox projectedBox = new BlockBox(-40, 16, -40, 40, 184, 40);
 
 		assertTrue(BiospheresStructureRouting.defaultRouting().canAccept(Identifier.of("minecraft", "mineshaft"), projectedBox, sphere));
 	}
+
+	@Test
+	void rejectsMineshaftsThatExtendBelowTheSphereFloor() {
+		BiospheresSphereDescriptor sphere = new BiospheresSphereDescriptor(0, 100, 0, 96, 97, 94, 16);
+		BlockBox projectedBox = new BlockBox(-40, -80, -40, 40, 40, 40);
+
+		assertFalse(BiospheresStructureRouting.defaultRouting().canAccept(Identifier.of("minecraft", "mineshaft"), projectedBox, sphere));
+	}
+
+	@Test
+	void rejectsLargeSurfaceStructuresWhenTheyWouldClipTheShell() {
+		BiospheresSphereDescriptor sphere = new BiospheresSphereDescriptor(0, 140, 0, 112, 113, 110, 16);
+		BlockBox projectedBox = new BlockBox(-120, 120, -120, 120, 220, 120);
+
+		assertFalse(BiospheresStructureRouting.defaultRouting().canAccept(Identifier.of("minecraft", "woodland_mansion"), projectedBox, sphere));
+	}
+
 }

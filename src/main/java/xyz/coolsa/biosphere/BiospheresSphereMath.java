@@ -52,6 +52,30 @@ public final class BiospheresSphereMath {
         return Math.max(1, Math.abs(secondCenterCoord - firstCenterCoord) - firstRadius - secondRadius);
     }
 
+    public static int bridgeProgress(int currentCoord, int centerCoord, int centerRadius, int neighborCoord) {
+        int direction = Integer.compare(neighborCoord, centerCoord);
+        int shellBoundary = centerCoord + direction * centerRadius;
+        return Math.max(0, direction * (currentCoord - shellBoundary));
+    }
+
+    public static int bridgeStartCoord(int centerCoord, int centerRadius, int neighborCoord) {
+        return centerCoord + Integer.compare(neighborCoord, centerCoord) * centerRadius;
+    }
+
+    public static int bridgeEndCoord(int neighborCoord, int neighborRadius, int centerCoord) {
+        return neighborCoord + Integer.compare(centerCoord, neighborCoord) * neighborRadius;
+    }
+
+    public static int interpolateBridgeY(int startY, int endY, int startCoord, int endCoord, int currentCoord) {
+        if (startCoord == endCoord) {
+            return startY;
+        }
+
+        double progress = (currentCoord - startCoord) / (double) (endCoord - startCoord);
+        progress = Math.max(0.0D, Math.min(1.0D, progress));
+        return (int) Math.round(startY + (endY - startY) * progress);
+    }
+
     public static int pickCenterY(MultiNoiseUtil.NoiseValuePoint point, int sphereRadius, int minimumY, int worldHeight) {
         double normalized = (Math.floorMod(point.depth(), 2_000_001L) / 1_000_000.0D) - 1.0D;
         double curved = Math.pow(normalized * 0.5D, 3.0D) + 0.5D;
