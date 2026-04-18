@@ -114,16 +114,30 @@ public final class BiospheresBiomeSource extends BiomeSource {
 		int centerX = BiospheresSphereMath.nearestCenter(x * 4, this.sphereDistance);
 		int centerZ = BiospheresSphereMath.nearestCenter(z * 4, this.sphereDistance);
 		MultiNoiseUtil.NoiseValuePoint spherePoint = noise.sample(centerX >> 2, 0, centerZ >> 2);
-		if (this.deepDarkBiome != null && this.isDeepDarkSphere(spherePoint)) {
+		int sphereIndex = this.pickSphereIndex(spherePoint, centerX, centerZ, this.biomes.size());
+		if (this.deepDarkBiome != null && this.isDeepDarkSphere(spherePoint, centerX, centerZ)) {
 			return this.deepDarkBiome;
 		}
 
-		int index = BiospheresSphereMath.pickIndex(spherePoint, this.biomes.size());
-		return this.biomes.get(index);
+		return this.biomes.get(sphereIndex);
 	}
 
-	private boolean isDeepDarkSphere(MultiNoiseUtil.NoiseValuePoint spherePoint) {
-		return BiospheresSphereMath.pickIndex(spherePoint, 8) == 0;
+	private boolean isDeepDarkSphere(MultiNoiseUtil.NoiseValuePoint spherePoint, int centerX, int centerZ) {
+		return this.pickSphereIndex(spherePoint, centerX, centerZ, 13) == 0;
+	}
+
+	private int pickSphereIndex(MultiNoiseUtil.NoiseValuePoint spherePoint, int centerX, int centerZ, int count) {
+		if (count <= 0) {
+			throw new IllegalArgumentException("count must be positive");
+		}
+
+		long mixed = spherePoint.temperatureNoise()
+			^ Long.rotateLeft(spherePoint.humidityNoise(), 11)
+			^ Long.rotateLeft(spherePoint.continentalnessNoise(), 22)
+			^ Long.rotateLeft(spherePoint.weirdnessNoise(), 33)
+			^ (long) centerX * 341873128712L
+			^ Long.rotateLeft((long) centerZ * 132897987541L, 17);
+		return Math.floorMod(mixed, count);
 	}
 
 	public List<RegistryEntry<Biome>> getSphereBiomes() {
