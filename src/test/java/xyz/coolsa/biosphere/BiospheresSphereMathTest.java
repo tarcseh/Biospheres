@@ -68,6 +68,16 @@ class BiospheresSphereMathTest {
         assertTrue(y <= 192);
     }
 
+	@Test
+	void keepsLargeSphereCentersInsideWorldBuildLimits() {
+		int y160 = BiospheresSphereMath.pickCenterYForSphere(0, 0, 160, -64, 384);
+		int y224 = BiospheresSphereMath.pickCenterYForSphere(480, 480, 224, -64, 384);
+
+		assertTrue(y160 >= 96);
+		assertTrue(y160 <= 160);
+		assertEquals(127, y224);
+	}
+
     @Test
     void picksStableRadiusForSphereCoordinates() {
         int first = BiospheresSphereMath.pickRadiusForSphere(128, 256, 20, 160);

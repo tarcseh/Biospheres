@@ -12,6 +12,7 @@ class BiospheresStructurePolicyTest {
 	void reportsMeasuredHorizontalBoundsForKnownFamilies() {
 		assertEquals(144, BiospheresStructureBoundsCatalog.requiredHorizontalRadius(BiospheresStructureFamily.VILLAGE));
 		assertEquals(120, BiospheresStructureBoundsCatalog.requiredHorizontalRadius(BiospheresStructureFamily.ANCIENT_CITY));
+		assertEquals(56, BiospheresStructureBoundsCatalog.requiredHorizontalRadius(BiospheresStructureFamily.OCEAN_RUIN));
 	}
 
 	@Test

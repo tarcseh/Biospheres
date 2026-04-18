@@ -23,8 +23,16 @@ public final class BiospheresStructureRouting {
 		Map.entry(Identifier.of("minecraft", "stronghold"), BiospheresStructureFamily.STRONGHOLD),
 		Map.entry(Identifier.of("minecraft", "trial_chambers"), BiospheresStructureFamily.TRIAL_CHAMBERS),
 		Map.entry(Identifier.of("minecraft", "ocean_monument"), BiospheresStructureFamily.OCEAN_MONUMENT),
+		Map.entry(Identifier.of("minecraft", "ocean_ruin_cold"), BiospheresStructureFamily.OCEAN_RUIN),
+		Map.entry(Identifier.of("minecraft", "ocean_ruin_warm"), BiospheresStructureFamily.OCEAN_RUIN),
 		Map.entry(Identifier.of("minecraft", "mineshaft"), BiospheresStructureFamily.MINESHAFT),
 		Map.entry(Identifier.of("minecraft", "ruined_portal"), BiospheresStructureFamily.RUINED_PORTAL),
+		Map.entry(Identifier.of("minecraft", "ruined_portal_desert"), BiospheresStructureFamily.RUINED_PORTAL),
+		Map.entry(Identifier.of("minecraft", "ruined_portal_jungle"), BiospheresStructureFamily.RUINED_PORTAL),
+		Map.entry(Identifier.of("minecraft", "ruined_portal_swamp"), BiospheresStructureFamily.RUINED_PORTAL),
+		Map.entry(Identifier.of("minecraft", "ruined_portal_mountain"), BiospheresStructureFamily.RUINED_PORTAL),
+		Map.entry(Identifier.of("minecraft", "ruined_portal_ocean"), BiospheresStructureFamily.RUINED_PORTAL),
+		Map.entry(Identifier.of("minecraft", "trail_ruins"), BiospheresStructureFamily.TRAIL_RUINS),
 		Map.entry(Identifier.of("minecraft", "desert_pyramid"), BiospheresStructureFamily.DESERT_PYRAMID),
 		Map.entry(Identifier.of("minecraft", "jungle_pyramid"), BiospheresStructureFamily.JUNGLE_TEMPLE),
 		Map.entry(Identifier.of("minecraft", "igloo"), BiospheresStructureFamily.IGLOO),
@@ -95,19 +103,34 @@ public final class BiospheresStructureRouting {
 		if (family.isEmpty()) {
 			return true;
 		}
-		if (family.get() == BiospheresStructureFamily.VILLAGE) {
-			return sphere.radius() >= 144 && this.canPlaceProjectedBounds(family.get(), sphere, projectedBox);
-		}
-		if (family.get() == BiospheresStructureFamily.WOODLAND_MANSION) {
-			return sphere.radius() >= 128 && this.canPlaceProjectedBounds(family.get(), sphere, projectedBox);
-		}
-		if (family.get() == BiospheresStructureFamily.MINESHAFT) {
+		if (family.get() == BiospheresStructureFamily.MINESHAFT
+			|| family.get() == BiospheresStructureFamily.STRONGHOLD) {
 			BiospheresStructureFit fit = this.policy.fitFor(family.get());
-			return BiospheresStructureConfinement.isHorizontallyWithinSphere(projectedBox, sphere, fit.shellMargin(), 32);
+			return this.canStart(family.get(), sphere)
+				&& BiospheresStructureConfinement.isHorizontallyWithinSphere(projectedBox, sphere, fit.shellMargin(), 32);
 		}
-		if (family.get() == BiospheresStructureFamily.STRONGHOLD) {
+		if (family.get() == BiospheresStructureFamily.TRIAL_CHAMBERS) {
 			BiospheresStructureFit fit = this.policy.fitFor(family.get());
-			return BiospheresStructureConfinement.isHorizontallyWithinSphere(projectedBox, sphere, fit.shellMargin(), 32);
+			return this.canStart(family.get(), sphere)
+				&& BiospheresStructureConfinement.isHorizontallyWithinSphere(projectedBox, sphere, fit.shellMargin(), 96);
+		}
+		if (family.get() == BiospheresStructureFamily.WOODLAND_MANSION || family.get() == BiospheresStructureFamily.ANCIENT_CITY) {
+			BiospheresStructureFit fit = this.policy.fitFor(family.get());
+			return this.canStart(family.get(), sphere)
+				&& BiospheresStructureConfinement.isHorizontallyWithinSphere(projectedBox, sphere, fit.shellMargin(), Math.max(96, fit.minVerticalClearance()));
+		}
+		if (family.get() == BiospheresStructureFamily.VILLAGE
+			|| family.get() == BiospheresStructureFamily.TRAIL_RUINS
+			|| family.get() == BiospheresStructureFamily.RUINED_PORTAL
+			|| family.get() == BiospheresStructureFamily.DESERT_PYRAMID
+			|| family.get() == BiospheresStructureFamily.SWAMP_HUT) {
+			BiospheresStructureFit fit = this.policy.fitFor(family.get());
+			return this.canStart(family.get(), sphere) && this.canPlaceProjectedBounds(family.get(), sphere, projectedBox);
+		}
+		if (family.get() == BiospheresStructureFamily.OCEAN_RUIN) {
+			BiospheresStructureFit fit = this.policy.fitFor(family.get());
+			return this.canStart(family.get(), sphere)
+				&& BiospheresStructureConfinement.isHorizontallyWithinSphere(projectedBox, sphere, fit.shellMargin(), fit.minVerticalClearance());
 		}
 		return this.canPlaceProjectedBounds(family.get(), sphere, projectedBox);
 	}

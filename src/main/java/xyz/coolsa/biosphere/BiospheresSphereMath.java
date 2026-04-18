@@ -89,19 +89,28 @@ public final class BiospheresSphereMath {
     public static int pickCenterY(MultiNoiseUtil.NoiseValuePoint point, int sphereRadius, int minimumY, int worldHeight) {
         double normalized = (Math.floorMod(point.depth(), 2_000_001L) / 1_000_000.0D) - 1.0D;
         double curved = Math.pow(normalized * 0.5D, 3.0D) + 0.5D;
-        int minCenter = minimumY + sphereRadius * 4;
-        int maxCenter = minimumY + worldHeight - sphereRadius * 4;
-        return minCenter + (int) Math.round(curved * (maxCenter - minCenter));
+        return pickCenterYFromCurve(curved, sphereRadius, minimumY, worldHeight);
     }
 
     public static int pickCenterYForSphere(int centerX, int centerZ, int sphereRadius, int minimumY, int worldHeight) {
         long mixed = mixSphereSeed(centerX, centerZ);
         double normalized = ((mixed >>> 11) * 0x1.0p-53) - 0.5D;
         double curved = Math.pow(normalized, 3.0D) + 0.5D;
-        int minCenter = minimumY + sphereRadius * 4;
-        int maxCenter = minimumY + worldHeight - sphereRadius * 4;
-        return minCenter + (int) Math.round(curved * (maxCenter - minCenter));
+        return pickCenterYFromCurve(curved, sphereRadius, minimumY, worldHeight);
     }
+
+	private static int pickCenterYFromCurve(double curved, int sphereRadius, int minimumY, int worldHeight) {
+		int worldBottom = minimumY;
+		int worldTop = minimumY + worldHeight - 1;
+		int minCenter = worldBottom + sphereRadius;
+		int maxCenter = worldTop - sphereRadius;
+		if (maxCenter < minCenter) {
+			return (worldBottom + worldTop) / 2;
+		}
+
+		double clamped = Math.max(0.0D, Math.min(1.0D, curved));
+		return minCenter + (int) Math.round(clamped * (maxCenter - minCenter));
+	}
 
     private static long mixSphereSeed(int centerX, int centerZ) {
         long mixed = 0x9E3779B97F4A7C15L;

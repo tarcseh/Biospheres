@@ -22,7 +22,9 @@ public final class BiospheresSphereLayout {
     public BiospheresSphereDescriptor resolve(int blockX, int blockZ) {
         int centerX = BiospheresSphereMath.nearestCenter(blockX, this.sphereDistance);
         int centerZ = BiospheresSphereMath.nearestCenter(blockZ, this.sphereDistance);
-        int radius = BiospheresSphereMath.pickRadiusForSphere(centerX, centerZ, this.minRadius, this.maxRadius);
+        int sampledRadius = BiospheresSphereMath.pickRadiusForSphere(centerX, centerZ, this.minRadius, this.maxRadius);
+        int maxRenderableRadius = Math.max(1, (this.worldHeight - 1) / 2);
+        int radius = Math.min(sampledRadius, maxRenderableRadius);
         int centerY = BiospheresSphereMath.pickCenterYForSphere(centerX, centerZ, radius, this.minimumY, this.worldHeight);
         int shellRadius = radius + 1;
         int bridgeRadius = Math.max(1, radius - this.shoreRadius);

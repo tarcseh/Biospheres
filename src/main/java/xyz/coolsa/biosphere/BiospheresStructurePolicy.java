@@ -60,6 +60,13 @@ public final class BiospheresStructurePolicy {
 				false,
 				false
 			)),
+			Map.entry(BiospheresStructureFamily.OCEAN_RUIN, new BiospheresStructureFit(
+				BiospheresStructureBoundsCatalog.requiredHorizontalRadius(BiospheresStructureFamily.OCEAN_RUIN),
+				36,
+				10,
+				true,
+				false
+			)),
 			Map.entry(BiospheresStructureFamily.MINESHAFT, new BiospheresStructureFit(
 				BiospheresStructureBoundsCatalog.requiredHorizontalRadius(BiospheresStructureFamily.MINESHAFT),
 				32,
@@ -71,6 +78,13 @@ public final class BiospheresStructurePolicy {
 				BiospheresStructureBoundsCatalog.requiredHorizontalRadius(BiospheresStructureFamily.RUINED_PORTAL),
 				32,
 				10,
+				true,
+				false
+			)),
+			Map.entry(BiospheresStructureFamily.TRAIL_RUINS, new BiospheresStructureFit(
+				BiospheresStructureBoundsCatalog.requiredHorizontalRadius(BiospheresStructureFamily.TRAIL_RUINS),
+				48,
+				12,
 				true,
 				false
 			)),

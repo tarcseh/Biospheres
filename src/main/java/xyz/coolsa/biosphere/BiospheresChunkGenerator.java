@@ -291,32 +291,7 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 
 	@Override
 	public Pair<BlockPos, RegistryEntry<Structure>> locateStructure(ServerWorld world, RegistryEntryList<Structure> structures, BlockPos center, int radius, boolean skipReferencedStructures) {
-		Pair<BlockPos, RegistryEntry<Structure>> vanillaResult = super.locateStructure(world, structures, center, radius, skipReferencedStructures);
-		if (vanillaResult == null) {
-			return null;
-		}
-
-		RegistryEntry<Structure> structureEntry = vanillaResult.getSecond();
-		Optional<Identifier> structureId = structureEntry.getKey().map(RegistryKey::getValue);
-		if (structureId.isEmpty()) {
-			return vanillaResult;
-		}
-
-		BiospheresSphereDescriptor sphere = this.layout.resolve(vanillaResult.getFirst().getX(), vanillaResult.getFirst().getZ());
-		BlockBox locateBox = new BlockBox(
-			vanillaResult.getFirst().getX() - 16,
-			vanillaResult.getFirst().getY() - 16,
-			vanillaResult.getFirst().getZ() - 16,
-			vanillaResult.getFirst().getX() + 16,
-			vanillaResult.getFirst().getY() + 16,
-			vanillaResult.getFirst().getZ() + 16
-		);
-
-		if (!this.structureRouting.canAccept(structureId.get(), locateBox, sphere)) {
-			return null;
-		}
-
-		return vanillaResult;
+		return super.locateStructure(world, structures, center, radius, skipReferencedStructures);
 	}
 
 	@Override
@@ -378,7 +353,19 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 		double sphereHalfHeight = Math.sqrt((double) descriptor.radius() * descriptor.radius()
 			- (center.getX() - x) * (double) (center.getX() - x)
 			- (center.getZ() - z) * (double) (center.getZ() - z));
-		return center.getY() + (int) sphereHalfHeight;
+		int topY = center.getY() + (int) sphereHalfHeight;
+		int bottomY = center.getY() - (int) sphereHalfHeight;
+		OctavePerlinNoiseSampler terrainNoise = this.createTerrainSampler(noiseConfig);
+		double columnNoise = terrainNoise.sample(x / 8.0D, 0.0D, z / 8.0D) / 8.0D;
+
+		for (int y = topY; y >= bottomY; y--) {
+			double threshold = columnNoise + (double) y / (double) center.getY();
+			if (y * threshold < center.getY()) {
+				return y;
+			}
+		}
+
+		return this.minimumY;
 	}
 
 	@Override
@@ -550,7 +537,8 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 		RegistryEntry<Structure> structureEntry = weightedEntry.structure();
 		Structure structure = structureEntry.value();
 		int references = this.getStructureReferences(structureAccessor, chunk, sectionPos, structure);
-		Predicate<RegistryEntry<Biome>> validBiomePredicate = structure.getValidBiomes()::contains;
+		Optional<Identifier> structureId = structureEntry.getKey().map(RegistryKey::getValue);
+		Predicate<RegistryEntry<Biome>> validBiomePredicate = this.shouldBypassBiomeGate(structureId) ? biome -> true : structure.getValidBiomes()::contains;
 		StructureStart start = structure.createStructureStart(
 			structureEntry,
 			dimension,
@@ -569,7 +557,6 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 			return false;
 		}
 
-		Optional<Identifier> structureId = structureEntry.getKey().map(RegistryKey::getValue);
 		BlockPos structureCenter = start.getBoundingBox().getCenter();
 		BiospheresSphereDescriptor sphere = this.layout.resolve(structureCenter.getX(), structureCenter.getZ());
 		if (structureId.isPresent() && !this.structureRouting.canAccept(structureId.get(), start.getBoundingBox(), sphere)) {
@@ -578,6 +565,18 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 
 		structureAccessor.setStructureStart(sectionPos, structure, start, chunk);
 		return true;
+	}
+
+	private boolean shouldBypassBiomeGate(Optional<Identifier> structureId) {
+		if (structureId.isEmpty()) {
+			return false;
+		}
+		Optional<BiospheresStructureFamily> family = this.structureRouting.familyFor(structureId.get());
+		if (family.isEmpty()) {
+			return false;
+		}
+
+		return family.get() != BiospheresStructureFamily.TRIAL_CHAMBERS;
 	}
 
 	private int getStructureReferences(StructureAccessor structureAccessor, Chunk chunk, ChunkSectionPos sectionPos, Structure structure) {
