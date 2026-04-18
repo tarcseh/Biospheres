@@ -37,7 +37,8 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 	public static final MapCodec<BiospheresChunkGenerator> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		BiomeSource.CODEC.fieldOf("biome_source").forGetter(BiospheresChunkGenerator::getBiomeSource),
 		Codec.INT.optionalFieldOf("sphere_distance", 128).forGetter(BiospheresChunkGenerator::getSphereDistance),
-		Codec.INT.optionalFieldOf("sphere_radius", 32).forGetter(BiospheresChunkGenerator::getSphereRadius),
+		Codec.INT.optionalFieldOf("min_sphere_radius", 20).forGetter(BiospheresChunkGenerator::getMinSphereRadius),
+		Codec.INT.optionalFieldOf("max_sphere_radius", 160).forGetter(BiospheresChunkGenerator::getMaxSphereRadius),
 		Codec.INT.optionalFieldOf("lake_radius", 16).forGetter(BiospheresChunkGenerator::getLakeRadius),
 		Codec.INT.optionalFieldOf("shore_radius", 6).forGetter(BiospheresChunkGenerator::getShoreRadius),
 		Codec.INT.optionalFieldOf("minimum_y", -64).forGetter(BiospheresChunkGenerator::getMinimumY),
@@ -49,11 +50,13 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 	).apply(instance, BiospheresChunkGenerator::new));
 
 	private final int sphereDistance;
-	private final int sphereRadius;
+	private final int minSphereRadius;
+	private final int maxSphereRadius;
 	private final int lakeRadius;
 	private final int shoreRadius;
 	private final int minimumY;
 	private final int worldHeight;
+	private final BiospheresSphereLayout layout;
 	private final Identifier defaultBlockId;
 	private final Identifier defaultFluidId;
 	private final Identifier defaultBridgeId;
@@ -66,7 +69,8 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 	public BiospheresChunkGenerator(
 		BiomeSource biomeSource,
 		int sphereDistance,
-		int sphereRadius,
+		int minSphereRadius,
+		int maxSphereRadius,
 		int lakeRadius,
 		int shoreRadius,
 		int minimumY,
@@ -78,11 +82,13 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 	) {
 		super(biomeSource);
 		this.sphereDistance = sphereDistance;
-		this.sphereRadius = sphereRadius;
+		this.minSphereRadius = minSphereRadius;
+		this.maxSphereRadius = maxSphereRadius;
 		this.lakeRadius = lakeRadius;
 		this.shoreRadius = shoreRadius;
 		this.minimumY = minimumY;
 		this.worldHeight = worldHeight;
+		this.layout = new BiospheresSphereLayout(sphereDistance, minSphereRadius, maxSphereRadius, lakeRadius, shoreRadius, minimumY, worldHeight);
 		this.defaultBlockId = defaultBlockId;
 		this.defaultFluidId = defaultFluidId;
 		this.defaultBridgeId = defaultBridgeId;
@@ -105,10 +111,7 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 	}
 
 	private BlockPos getNearestSphereCenter(NoiseConfig noiseConfig, int x, int z) {
-		int centerX = BiospheresSphereMath.nearestCenter(x, this.sphereDistance);
-		int centerZ = BiospheresSphereMath.nearestCenter(z, this.sphereDistance);
-		int centerY = BiospheresSphereMath.pickCenterYForSphere(centerX, centerZ, this.sphereRadius, this.minimumY, this.worldHeight);
-		return new BlockPos(centerX, centerY, centerZ);
+		return this.layout.resolve(x, z).centerPos();
 	}
 
 	private BlockState getLakeBlock(NoiseConfig noiseConfig, BlockPos center) {
@@ -128,12 +131,13 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 
 		for (int x = chunkPos.getStartX(); x <= chunkPos.getEndX(); x++) {
 			for (int z = chunkPos.getStartZ(); z <= chunkPos.getEndZ(); z++) {
+				BiospheresSphereDescriptor descriptor = this.layout.resolve(x, z);
 				double radialDistance = Math.sqrt(center.getSquaredDistance(x, center.getY(), z));
-				if (radialDistance > this.sphereRadius) {
+				if (radialDistance > descriptor.radius()) {
 					continue;
 				}
 
-				double sphereHalfHeight = Math.sqrt((double) this.sphereRadius * this.sphereRadius
+				double sphereHalfHeight = Math.sqrt((double) descriptor.radius() * descriptor.radius()
 					- (center.getX() - x) * (double) (center.getX() - x)
 					- (center.getZ() - z) * (double) (center.getZ() - z));
 				double columnNoise = terrainNoise.sample(x / 8.0D, 0.0D, z / 8.0D) / 8.0D;
@@ -143,7 +147,7 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 					double threshold = columnNoise + (double) y / (double) center.getY();
 					BlockState state = y * threshold < center.getY() ? this.defaultBlock : Blocks.AIR.getDefaultState();
 
-					if (state.isOf(this.defaultBlock.getBlock()) && shellDistance <= this.lakeRadius && !lakeState.isAir()) {
+					if (state.isOf(this.defaultBlock.getBlock()) && shellDistance <= descriptor.lakeRadius() && !lakeState.isAir()) {
 						state = y * threshold >= center.getY() - 1 ? Blocks.AIR.getDefaultState() : lakeState;
 					}
 
@@ -243,12 +247,13 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 
 	@Override
 	public int getHeight(int x, int z, Heightmap.Type heightmap, HeightLimitView world, NoiseConfig noiseConfig) {
-		BlockPos center = this.getNearestSphereCenter(noiseConfig, x, z);
-			double radialDistance = Math.sqrt(center.getSquaredDistance(x, center.getY(), z));
-		if (radialDistance > this.sphereRadius) {
+		BiospheresSphereDescriptor descriptor = this.layout.resolve(x, z);
+		BlockPos center = descriptor.centerPos();
+		double radialDistance = Math.sqrt(center.getSquaredDistance(x, center.getY(), z));
+		if (radialDistance > descriptor.radius()) {
 			return this.minimumY;
 		}
-		double sphereHalfHeight = Math.sqrt((double) this.sphereRadius * this.sphereRadius
+		double sphereHalfHeight = Math.sqrt((double) descriptor.radius() * descriptor.radius()
 			- (center.getX() - x) * (double) (center.getX() - x)
 			- (center.getZ() - z) * (double) (center.getZ() - z));
 		return center.getY() + (int) sphereHalfHeight;
@@ -275,21 +280,22 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 		BlockPos centerPos = this.getNearestSphereCenter(world.getSeed(), chunkPos.getCenterX(), chunkPos.getCenterZ());
 		BlockPos.Mutable current = new BlockPos.Mutable();
 		BlockPos[] closestSpheres = this.getClosestSpheres(world.getSeed(), centerPos);
+		BiospheresSphereDescriptor centerDescriptor = this.layout.resolve(centerPos.getX(), centerPos.getZ());
 
 		for (int x = chunkPos.getStartX(); x <= chunkPos.getEndX(); x++) {
 			for (int z = chunkPos.getStartZ(); z <= chunkPos.getEndZ(); z++) {
 				double radialDistance = Math.sqrt(centerPos.getSquaredDistance(x, centerPos.getY(), z));
-				if (radialDistance <= this.sphereRadius + 16) {
-					double sphereHalfHeight = Math.sqrt((double) this.sphereRadius * this.sphereRadius
+				if (radialDistance <= centerDescriptor.radius() + 16) {
+					double sphereHalfHeight = Math.sqrt((double) centerDescriptor.radius() * centerDescriptor.radius()
 						- (centerPos.getX() - x) * (double) (centerPos.getX() - x)
 						- (centerPos.getZ() - z) * (double) (centerPos.getZ() - z));
-					double largerSphereHalfHeight = Math.sqrt((double) (this.sphereRadius + 16) * (this.sphereRadius + 16)
+					double largerSphereHalfHeight = Math.sqrt((double) (centerDescriptor.radius() + 16) * (centerDescriptor.radius() + 16)
 						- (centerPos.getX() - x) * (double) (centerPos.getX() - x)
 						- (centerPos.getZ() - z) * (double) (centerPos.getZ() - z));
 
 					for (int y = centerPos.getY() - (int) sphereHalfHeight; y <= centerPos.getY() + (int) sphereHalfHeight; y++) {
 						double newRadialDistance = Math.sqrt(centerPos.getSquaredDistance(x, y, z));
-						if (newRadialDistance <= this.sphereRadius - 1) {
+						if (newRadialDistance <= centerDescriptor.radius() - 1) {
 							continue;
 						}
 
@@ -301,7 +307,7 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 
 					for (int y = 0; y <= centerPos.getY() + (int) largerSphereHalfHeight; y++) {
 						double newRadialDistance = Math.sqrt(centerPos.getSquaredDistance(x, y, z));
-						if (newRadialDistance >= this.sphereRadius) {
+						if (newRadialDistance >= centerDescriptor.radius()) {
 							world.setBlockState(current.set(x, y, z), Blocks.AIR.getDefaultState(), 0);
 						}
 					}
@@ -313,10 +319,7 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 	}
 
 	private BlockPos getNearestSphereCenter(long seed, int x, int z) {
-		int centerX = BiospheresSphereMath.nearestCenter(x, this.sphereDistance);
-		int centerZ = BiospheresSphereMath.nearestCenter(z, this.sphereDistance);
-		int centerY = BiospheresSphereMath.pickCenterYForSphere(centerX, centerZ, this.sphereRadius, this.minimumY, this.worldHeight);
-		return new BlockPos(centerX, centerY, centerZ);
+		return this.layout.resolve(x, z).centerPos();
 	}
 
 	private BlockPos[] getClosestSpheres(long seed, BlockPos centerPos) {
@@ -336,35 +339,36 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 
 	private void makeBridges(BlockPos pos, BlockPos centerPos, BlockPos[] nesw, StructureWorldAccess world, BlockPos.Mutable current) {
 		double radialDistance = Math.sqrt(centerPos.getSquaredDistance(pos.getX(), centerPos.getY(), pos.getZ()));
+		BiospheresSphereDescriptor centerDescriptor = this.layout.resolve(centerPos.getX(), centerPos.getZ());
 		for (int i = 0; i < 4; i++) {
-			if (radialDistance > this.sphereRadius - 2) {
+			if (radialDistance > centerDescriptor.radius() - 2) {
 				double slope = nesw[i].getY() - centerPos.getY();
 				double currentPos = 0;
 				switch (i) {
 					case 0 -> {
-						slope /= Math.abs((double) (centerPos.getZ() - nesw[i].getZ())) - 2 * this.sphereRadius;
-						currentPos = centerPos.getX() - pos.getX() + this.sphereRadius;
+						slope /= Math.abs((double) (centerPos.getZ() - nesw[i].getZ())) - 2 * centerDescriptor.radius();
+						currentPos = centerPos.getX() - pos.getX() + centerDescriptor.radius();
 						if (pos.getZ() <= centerPos.getZ() + 2 && pos.getZ() >= centerPos.getZ() - 2 && pos.getX() > centerPos.getX()) {
 							this.fillBridgeSlice(new BlockPos(pos.getX(), (int) (slope * currentPos + centerPos.getY()), pos.getZ()), world, current);
 						}
 					}
 					case 1 -> {
-						slope /= -Math.abs((double) (centerPos.getZ() - nesw[i].getZ())) + 2 * this.sphereRadius;
-						currentPos = centerPos.getX() - pos.getX() - this.sphereRadius;
+						slope /= -Math.abs((double) (centerPos.getZ() - nesw[i].getZ())) + 2 * centerDescriptor.radius();
+						currentPos = centerPos.getX() - pos.getX() - centerDescriptor.radius();
 						if (pos.getZ() <= centerPos.getZ() + 2 && pos.getZ() >= centerPos.getZ() - 2 && pos.getX() < centerPos.getX()) {
 							this.fillBridgeSlice(new BlockPos(pos.getX(), (int) (slope * currentPos + centerPos.getY()), pos.getZ()), world, current);
 						}
 					}
 					case 2 -> {
-						slope /= -Math.abs((double) (centerPos.getZ() - nesw[i].getZ())) + 2 * this.sphereRadius;
-						currentPos = centerPos.getZ() - pos.getZ() + this.sphereRadius;
+						slope /= -Math.abs((double) (centerPos.getZ() - nesw[i].getZ())) + 2 * centerDescriptor.radius();
+						currentPos = centerPos.getZ() - pos.getZ() + centerDescriptor.radius();
 						if (pos.getX() <= centerPos.getX() + 2 && pos.getX() >= centerPos.getX() - 2 && pos.getZ() > centerPos.getZ()) {
 							this.fillBridgeSlice(new BlockPos(pos.getX(), (int) (slope * currentPos + centerPos.getY()), pos.getZ()), world, current);
 						}
 					}
 					case 3 -> {
-						slope /= Math.abs((double) (centerPos.getZ() - nesw[i].getZ())) - 2 * this.sphereRadius;
-						currentPos = centerPos.getZ() - pos.getZ() - this.sphereRadius;
+						slope /= Math.abs((double) (centerPos.getZ() - nesw[i].getZ())) - 2 * centerDescriptor.radius();
+						currentPos = centerPos.getZ() - pos.getZ() - centerDescriptor.radius();
 						if (pos.getX() <= centerPos.getX() + 2 && pos.getX() >= centerPos.getX() - 2 && pos.getZ() < centerPos.getZ()) {
 							this.fillBridgeSlice(new BlockPos(pos.getX(), (int) (slope * currentPos + centerPos.getY()), pos.getZ()), world, current);
 						}
@@ -389,8 +393,12 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 		return this.sphereDistance;
 	}
 
-	public int getSphereRadius() {
-		return this.sphereRadius;
+	public int getMinSphereRadius() {
+		return this.minSphereRadius;
+	}
+
+	public int getMaxSphereRadius() {
+		return this.maxSphereRadius;
 	}
 
 	public int getLakeRadius() {

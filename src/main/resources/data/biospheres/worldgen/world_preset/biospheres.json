@@ -5,7 +5,8 @@
       "generator": {
         "type": "biospheres:biosphere",
         "sphere_distance": 128,
-        "sphere_radius": 32,
+        "min_sphere_radius": 20,
+        "max_sphere_radius": 160,
         "lake_radius": 16,
         "shore_radius": 6,
         "minimum_y": -64,

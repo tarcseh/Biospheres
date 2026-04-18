@@ -17,6 +17,8 @@ import net.minecraft.world.biome.Biome;
 import net.minecraft.world.biome.BiomeKeys;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -68,6 +70,18 @@ class BiospheresWorldPresetCodecTest {
 			""";
 
 		assertThrows(IllegalStateException.class, () -> decodeCodecData(json));
+	}
+
+	@Test
+	void worldPresetUsesGeneratorRadiusRangeFields() throws Exception {
+		JsonElement preset = JsonParser.parseString(Files.readString(Path.of("src/main/resources/data/biospheres/worldgen/world_preset/biospheres.json")));
+		JsonElement generator = preset.getAsJsonObject()
+			.getAsJsonObject("dimensions")
+			.getAsJsonObject("minecraft:overworld")
+			.getAsJsonObject("generator");
+
+		assertEquals(20, generator.getAsJsonObject().get("min_sphere_radius").getAsInt());
+		assertEquals(160, generator.getAsJsonObject().get("max_sphere_radius").getAsInt());
 	}
 
 	private static BiospheresBiomeSource.CodecData decodeCodecData(String json) {

@@ -1,5 +1,7 @@
 package xyz.coolsa.biosphere;
 
+import net.minecraft.util.math.BlockPos;
+
 public record BiospheresSphereDescriptor(
 	int centerX,
 	int centerY,
@@ -9,4 +11,7 @@ public record BiospheresSphereDescriptor(
 	int bridgeRadius,
 	int lakeRadius
 ) {
+	public BlockPos centerPos() {
+		return new BlockPos(this.centerX, this.centerY, this.centerZ);
+	}
 }
