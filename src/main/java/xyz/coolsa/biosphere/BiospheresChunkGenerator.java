@@ -57,6 +57,7 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 	private final int minimumY;
 	private final int worldHeight;
 	private final BiospheresSphereLayout layout;
+	private final BiospheresStructureRouting structureRouting;
 	private final Identifier defaultBlockId;
 	private final Identifier defaultFluidId;
 	private final Identifier defaultBridgeId;
@@ -89,6 +90,7 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 		this.minimumY = minimumY;
 		this.worldHeight = worldHeight;
 		this.layout = new BiospheresSphereLayout(sphereDistance, minSphereRadius, maxSphereRadius, lakeRadius, shoreRadius, minimumY, worldHeight);
+		this.structureRouting = BiospheresStructureRouting.defaultRouting();
 		this.defaultBlockId = defaultBlockId;
 		this.defaultFluidId = defaultFluidId;
 		this.defaultBridgeId = defaultBridgeId;
@@ -226,8 +228,22 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 
 	@Override
 	public void generateFeatures(StructureWorldAccess world, Chunk chunk, StructureAccessor structureAccessor) {
+		if (!this.canGenerateStructureFeatures(world, chunk, structureAccessor)) {
+			return;
+		}
+
 		super.generateFeatures(world, chunk, structureAccessor);
 		this.finishBiospheres(world, chunk, structureAccessor);
+	}
+
+	private boolean canGenerateStructureFeatures(StructureWorldAccess world, Chunk chunk, StructureAccessor structureAccessor) {
+		if (!structureAccessor.shouldGenerateStructures()) {
+			return false;
+		}
+
+		BiospheresSphereDescriptor sphere = this.layout.resolve(chunk.getPos().getCenterX(), chunk.getPos().getCenterZ());
+		return structureAccessor.getStructureStarts(chunk.getPos(), structure -> true).stream()
+			.allMatch(start -> this.structureRouting.canAccept(start, sphere, world.getServer().getRegistryManager()));
 	}
 
 	@Override
