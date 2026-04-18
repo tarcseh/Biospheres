@@ -113,6 +113,13 @@ class BiospheresSphereMathTest {
     }
 
     @Test
+    void increasesBridgeSupportDepthForSteeperShorterSpans() {
+        assertEquals(1, BiospheresSphereMath.bridgeSupportDepth(100, 116, 320, 384));
+        assertEquals(2, BiospheresSphereMath.bridgeSupportDepth(100, 132, 320, 352));
+        assertEquals(4, BiospheresSphereMath.bridgeSupportDepth(100, 164, 320, 336));
+    }
+
+    @Test
     void interpolatesBridgeHeightAcrossTheWholeSpan() {
         assertEquals(100, BiospheresSphereMath.interpolateBridgeY(100, 132, 320, 384, 320));
         assertEquals(116, BiospheresSphereMath.interpolateBridgeY(100, 132, 320, 384, 352));

@@ -66,6 +66,16 @@ public final class BiospheresSphereMath {
         return neighborCoord + Integer.compare(centerCoord, neighborCoord) * neighborRadius;
     }
 
+    public static int bridgeSupportDepth(int startY, int endY, int startCoord, int endCoord) {
+        int span = Math.max(1, Math.abs(endCoord - startCoord));
+        int heightDelta = Math.abs(endY - startY);
+        if (heightDelta * 2 < span) {
+            return 1;
+        }
+
+        return Math.max(2, (int) Math.ceil(heightDelta / (double) span));
+    }
+
     public static int interpolateBridgeY(int startY, int endY, int startCoord, int endCoord, int currentCoord) {
         if (startCoord == endCoord) {
             return startY;
