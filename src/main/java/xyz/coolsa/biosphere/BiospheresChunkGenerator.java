@@ -627,25 +627,44 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 			if (i == 0 || i == 1) {
 				int startX = BiospheresSphereMath.bridgeStartCoord(centerPos.getX(), centerDescriptor.radius(), nesw[i].getX());
 				int endX = BiospheresSphereMath.bridgeEndCoord(nesw[i].getX(), neighborDescriptor.radius(), centerPos.getX());
+				int directionX = Integer.compare(endX, startX);
 				int minX = Math.min(startX, endX);
 				int maxX = Math.max(startX, endX);
 				if (pos.getZ() >= centerPos.getZ() - 2 && pos.getZ() <= centerPos.getZ() + 2 && pos.getX() >= minX && pos.getX() <= maxX) {
 					int bridgeY = BiospheresSphereMath.interpolateBridgeY(centerPos.getY(), nesw[i].getY(), startX, endX, pos.getX());
 					this.fillBridgeSlice(new BlockPos(pos.getX(), bridgeY, pos.getZ()), world, current);
+					if (pos.getX() == startX) {
+						this.clearBridgeEntrance(new BlockPos(pos.getX(), bridgeY, pos.getZ()), directionX, 0, world, current);
+					}
 				}
 			}
 
 			if (i == 2 || i == 3) {
 				int startZ = BiospheresSphereMath.bridgeStartCoord(centerPos.getZ(), centerDescriptor.radius(), nesw[i].getZ());
 				int endZ = BiospheresSphereMath.bridgeEndCoord(nesw[i].getZ(), neighborDescriptor.radius(), centerPos.getZ());
+				int directionZ = Integer.compare(endZ, startZ);
 				int minZ = Math.min(startZ, endZ);
 				int maxZ = Math.max(startZ, endZ);
 				if (pos.getX() >= centerPos.getX() - 2 && pos.getX() <= centerPos.getX() + 2 && pos.getZ() >= minZ && pos.getZ() <= maxZ) {
 					int bridgeY = BiospheresSphereMath.interpolateBridgeY(centerPos.getY(), nesw[i].getY(), startZ, endZ, pos.getZ());
 					this.fillBridgeSlice(new BlockPos(pos.getX(), bridgeY, pos.getZ()), world, current);
+					if (pos.getZ() == startZ) {
+						this.clearBridgeEntrance(new BlockPos(pos.getX(), bridgeY, pos.getZ()), 0, directionZ, world, current);
+					}
 				}
 			}
 		}
+	}
+
+	private void clearBridgeEntrance(BlockPos pos, int stepX, int stepZ, StructureWorldAccess world, BlockPos.Mutable current) {
+		int x = pos.getX() + stepX;
+		int y = pos.getY();
+		int z = pos.getZ() + stepZ;
+		world.setBlockState(current.set(x, y - 1, z), Blocks.AIR.getDefaultState(), 0);
+		world.setBlockState(current.set(x, y, z), Blocks.AIR.getDefaultState(), 0);
+		world.setBlockState(current.set(x, y + 1, z), Blocks.AIR.getDefaultState(), 0);
+		world.setBlockState(current.set(x, y + 2, z), Blocks.AIR.getDefaultState(), 0);
+		world.setBlockState(current.set(x, y + 3, z), Blocks.AIR.getDefaultState(), 0);
 	}
 
 	private void fillBridgeSlice(BlockPos pos, StructureWorldAccess world, BlockPos.Mutable current) {
