@@ -9,6 +9,7 @@ import net.minecraft.registry.entry.RegistryFixedCodec;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.util.Identifier;
 import net.minecraft.world.biome.Biome;
+import net.minecraft.world.biome.BiomeKeys;
 import net.minecraft.world.biome.source.BiomeSource;
 import net.minecraft.world.biome.source.util.MultiNoiseUtil;
 
@@ -80,6 +81,7 @@ public final class BiospheresBiomeSource extends BiomeSource {
 	private final int sphereDistance;
 	private final int minSphereRadius;
 	private final int maxSphereRadius;
+	private final RegistryEntry<Biome> deepDarkBiome;
 
 	public BiospheresBiomeSource(List<RegistryEntry<Biome>> biomes, RegistryEntry<Biome> voidBiome, int sphereDistance, int minSphereRadius, int maxSphereRadius) {
 		this.biomes = List.copyOf(biomes);
@@ -87,6 +89,10 @@ public final class BiospheresBiomeSource extends BiomeSource {
 		this.sphereDistance = sphereDistance;
 		this.minSphereRadius = minSphereRadius;
 		this.maxSphereRadius = maxSphereRadius;
+		this.deepDarkBiome = this.biomes.stream()
+			.filter(entry -> entry.matchesKey(BiomeKeys.DEEP_DARK))
+			.findFirst()
+			.orElse(null);
 	}
 
 	@Override
@@ -107,8 +113,17 @@ public final class BiospheresBiomeSource extends BiomeSource {
 
 		int centerX = BiospheresSphereMath.nearestCenter(x * 4, this.sphereDistance);
 		int centerZ = BiospheresSphereMath.nearestCenter(z * 4, this.sphereDistance);
-		int index = BiospheresSphereMath.pickIndexForSphere(centerX, centerZ, this.biomes.size());
+		MultiNoiseUtil.NoiseValuePoint spherePoint = noise.sample(centerX >> 2, 0, centerZ >> 2);
+		if (this.deepDarkBiome != null && this.isDeepDarkSphere(spherePoint)) {
+			return this.deepDarkBiome;
+		}
+
+		int index = BiospheresSphereMath.pickIndex(spherePoint, this.biomes.size());
 		return this.biomes.get(index);
+	}
+
+	private boolean isDeepDarkSphere(MultiNoiseUtil.NoiseValuePoint spherePoint) {
+		return BiospheresSphereMath.pickIndex(spherePoint, 8) == 0;
 	}
 
 	public List<RegistryEntry<Biome>> getSphereBiomes() {
