@@ -24,6 +24,11 @@ bin/
 .classpath
 .project
 
+# claude / opencode
+
+.claude/
+logs/
+
 # fabric
 
 run/
