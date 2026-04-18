@@ -401,6 +401,7 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 		ChunkPos chunkPos = chunk.getPos();
 		BlockPos centerPos = this.getNearestSphereCenter(world.getSeed(), chunkPos.getCenterX(), chunkPos.getCenterZ());
 		BlockPos.Mutable current = new BlockPos.Mutable();
+		List<BridgeEntrance> bridgeEntrances = new ArrayList<>();
 		BlockPos[] closestSpheres = this.getClosestSpheres(world.getSeed(), centerPos);
 		BiospheresSphereDescriptor centerDescriptor = this.layout.resolve(centerPos.getX(), centerPos.getZ());
 		List<BlockBox> protectedStructures = this.getProtectedStructureBoxes(chunk, structureAccessor);
@@ -439,9 +440,11 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 					}
 				}
 
-				this.makeBridges(new BlockPos(x, 0, z), centerPos, closestSpheres, world, current);
+				this.makeBridges(new BlockPos(x, 0, z), centerPos, closestSpheres, world, current, bridgeEntrances);
 			}
 		}
+
+		this.clearBridgeEntrances(world, bridgeEntrances, current);
 	}
 
 	private BlockPos getNearestSphereCenter(long seed, int x, int z) {
@@ -619,7 +622,7 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 		return nesw;
 	}
 
-	private void makeBridges(BlockPos pos, BlockPos centerPos, BlockPos[] nesw, StructureWorldAccess world, BlockPos.Mutable current) {
+	private void makeBridges(BlockPos pos, BlockPos centerPos, BlockPos[] nesw, StructureWorldAccess world, BlockPos.Mutable current, List<BridgeEntrance> bridgeEntrances) {
 		BiospheresSphereDescriptor centerDescriptor = this.layout.resolve(centerPos.getX(), centerPos.getZ());
 		for (int i = 0; i < 4; i++) {
 			BiospheresSphereDescriptor neighborDescriptor = this.layout.resolve(nesw[i].getX(), nesw[i].getZ());
@@ -632,10 +635,15 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 				int maxX = Math.max(startX, endX);
 				if (pos.getZ() >= centerPos.getZ() - 2 && pos.getZ() <= centerPos.getZ() + 2 && pos.getX() >= minX && pos.getX() <= maxX) {
 					int bridgeY = BiospheresSphereMath.interpolateBridgeY(centerPos.getY(), nesw[i].getY(), startX, endX, pos.getX());
-					int supportDepth = BiospheresSphereMath.bridgeSupportDepth(centerPos.getY(), nesw[i].getY(), startX, endX);
-					this.fillBridgeRamp(new BlockPos(pos.getX(), bridgeY, pos.getZ()), supportDepth, world, current);
-					if (pos.getX() == startX) {
-						this.clearBridgeEntrance(new BlockPos(pos.getX(), bridgeY, pos.getZ()), directionX, 0, world, current);
+					int previousX = pos.getX() - directionX;
+					if (previousX >= minX && previousX <= maxX) {
+						int previousBridgeY = BiospheresSphereMath.interpolateBridgeY(centerPos.getY(), nesw[i].getY(), startX, endX, previousX);
+						this.fillBridgeRamp(new BlockPos(pos.getX(), bridgeY, pos.getZ()), previousBridgeY, world, current);
+					} else {
+						this.fillBridgeSlice(new BlockPos(pos.getX(), bridgeY, pos.getZ()), world, current);
+					}
+					if (pos.getX() == startX && pos.getZ() == centerPos.getZ()) {
+						bridgeEntrances.add(new BridgeEntrance(new BlockPos(pos.getX(), bridgeY, pos.getZ()), directionX, 0));
 					}
 				}
 			}
@@ -648,31 +656,50 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 				int maxZ = Math.max(startZ, endZ);
 				if (pos.getX() >= centerPos.getX() - 2 && pos.getX() <= centerPos.getX() + 2 && pos.getZ() >= minZ && pos.getZ() <= maxZ) {
 					int bridgeY = BiospheresSphereMath.interpolateBridgeY(centerPos.getY(), nesw[i].getY(), startZ, endZ, pos.getZ());
-					int supportDepth = BiospheresSphereMath.bridgeSupportDepth(centerPos.getY(), nesw[i].getY(), startZ, endZ);
-					this.fillBridgeRamp(new BlockPos(pos.getX(), bridgeY, pos.getZ()), supportDepth, world, current);
-					if (pos.getZ() == startZ) {
-						this.clearBridgeEntrance(new BlockPos(pos.getX(), bridgeY, pos.getZ()), 0, directionZ, world, current);
+					int previousZ = pos.getZ() - directionZ;
+					if (previousZ >= minZ && previousZ <= maxZ) {
+						int previousBridgeY = BiospheresSphereMath.interpolateBridgeY(centerPos.getY(), nesw[i].getY(), startZ, endZ, previousZ);
+						this.fillBridgeRamp(new BlockPos(pos.getX(), bridgeY, pos.getZ()), previousBridgeY, world, current);
+					} else {
+						this.fillBridgeSlice(new BlockPos(pos.getX(), bridgeY, pos.getZ()), world, current);
+					}
+					if (pos.getZ() == startZ && pos.getX() == centerPos.getX()) {
+						bridgeEntrances.add(new BridgeEntrance(new BlockPos(pos.getX(), bridgeY, pos.getZ()), 0, directionZ));
 					}
 				}
 			}
 		}
 	}
 
-	private void fillBridgeRamp(BlockPos pos, int supportDepth, StructureWorldAccess world, BlockPos.Mutable current) {
-		for (int offset = 0; offset < supportDepth; offset++) {
-			this.fillBridgeSlice(new BlockPos(pos.getX(), pos.getY() - offset, pos.getZ()), world, current);
+	private void clearBridgeEntrances(StructureWorldAccess world, List<BridgeEntrance> bridgeEntrances, BlockPos.Mutable current) {
+		for (BridgeEntrance entrance : bridgeEntrances) {
+			this.clearBridgeEntrance(entrance.pos(), entrance.stepX(), entrance.stepZ(), world, current);
+		}
+	}
+
+	private void fillBridgeRamp(BlockPos pos, int previousBridgeY, StructureWorldAccess world, BlockPos.Mutable current) {
+		int minY = Math.min(previousBridgeY, pos.getY());
+		int maxY = Math.max(previousBridgeY, pos.getY());
+		for (int y = minY; y <= maxY; y++) {
+			this.fillBridgeSlice(new BlockPos(pos.getX(), y, pos.getZ()), world, current);
 		}
 	}
 
 	private void clearBridgeEntrance(BlockPos pos, int stepX, int stepZ, StructureWorldAccess world, BlockPos.Mutable current) {
-		int x = pos.getX() + stepX;
-		int y = pos.getY();
-		int z = pos.getZ() + stepZ;
-		world.setBlockState(current.set(x, y - 1, z), Blocks.AIR.getDefaultState(), 0);
-		world.setBlockState(current.set(x, y, z), Blocks.AIR.getDefaultState(), 0);
-		world.setBlockState(current.set(x, y + 1, z), Blocks.AIR.getDefaultState(), 0);
-		world.setBlockState(current.set(x, y + 2, z), Blocks.AIR.getDefaultState(), 0);
-		world.setBlockState(current.set(x, y + 3, z), Blocks.AIR.getDefaultState(), 0);
+		for (int depthOffset = 0; depthOffset <= 1; depthOffset++) {
+			int x = pos.getX() - stepX * depthOffset;
+			int z = pos.getZ() - stepZ * depthOffset;
+			for (int widthOffset = -2; widthOffset <= 2; widthOffset++) {
+				int widthX = x + (stepZ == 0 ? 0 : widthOffset);
+				int widthZ = z + (stepX == 0 ? 0 : widthOffset);
+				for (int heightOffset = -1; heightOffset <= 3; heightOffset++) {
+					current.set(widthX, pos.getY() + heightOffset, widthZ);
+					if (world.getBlockState(current).isOf(Blocks.GLASS)) {
+						world.setBlockState(current, Blocks.AIR.getDefaultState(), 0);
+					}
+				}
+			}
+		}
 	}
 
 	private void fillBridgeSlice(BlockPos pos, StructureWorldAccess world, BlockPos.Mutable current) {
@@ -684,6 +711,30 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 		world.setBlockState(current.set(x, y + 1, z), Blocks.AIR.getDefaultState(), 0);
 		world.setBlockState(current.set(x, y + 2, z), Blocks.AIR.getDefaultState(), 0);
 		world.setBlockState(current.set(x, y + 3, z), Blocks.AIR.getDefaultState(), 0);
+	}
+
+	private static final class BridgeEntrance {
+		private final BlockPos pos;
+		private final int stepX;
+		private final int stepZ;
+
+		private BridgeEntrance(BlockPos pos, int stepX, int stepZ) {
+			this.pos = pos;
+			this.stepX = stepX;
+			this.stepZ = stepZ;
+		}
+
+		private BlockPos pos() {
+			return this.pos;
+		}
+
+		private int stepX() {
+			return this.stepX;
+		}
+
+		private int stepZ() {
+			return this.stepZ;
+		}
 	}
 
 	public int getSphereDistance() {
