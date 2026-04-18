@@ -25,7 +25,7 @@ public final class BiospheresBiomeSource extends BiomeSource {
 		public static final MapCodec<CodecData> CODEC = RecordCodecBuilder.<CodecData>mapCodec(instance -> instance.group(
 			RegistryFixedCodec.of(RegistryKeys.BIOME).listOf().fieldOf("biomes").forGetter(CodecData::biomes),
 			RegistryFixedCodec.of(RegistryKeys.BIOME).fieldOf("void_biome").forGetter(CodecData::voidBiome),
-			Codec.INT.optionalFieldOf("sphere_distance", 128).forGetter(CodecData::sphereDistance),
+			Codec.INT.optionalFieldOf("sphere_distance", 384).forGetter(CodecData::sphereDistance),
 			Codec.INT.optionalFieldOf("min_sphere_radius", 20).forGetter(CodecData::minSphereRadius),
 			Codec.INT.optionalFieldOf("max_sphere_radius", 160).forGetter(CodecData::maxSphereRadius)
 		).apply(instance, CodecData::new)).validate(data -> {

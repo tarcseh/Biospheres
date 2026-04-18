@@ -48,6 +48,10 @@ public final class BiospheresSphereMath {
         return minRadius + Math.floorMod(mixed, radiusSpan);
     }
 
+    public static int bridgeGap(int firstCenterCoord, int secondCenterCoord, int firstRadius, int secondRadius) {
+        return Math.max(1, Math.abs(secondCenterCoord - firstCenterCoord) - firstRadius - secondRadius);
+    }
+
     public static int pickCenterY(MultiNoiseUtil.NoiseValuePoint point, int sphereRadius, int minimumY, int worldHeight) {
         double normalized = (Math.floorMod(point.depth(), 2_000_001L) / 1_000_000.0D) - 1.0D;
         double curved = Math.pow(normalized * 0.5D, 3.0D) + 0.5D;

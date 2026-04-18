@@ -48,6 +48,10 @@ public final class BiospheresStructureRouting {
 		return Optional.ofNullable(STRUCTURE_FAMILIES.get(structureId));
 	}
 
+	public boolean canSkipUnknownStructure(Identifier structureId) {
+		return this.familyFor(structureId).isEmpty();
+	}
+
 	public Optional<BiospheresStructureFamily> familyFor(StructureStart start, DynamicRegistryManager registryManager) {
 		if (start == null) {
 			return Optional.empty();
@@ -86,10 +90,21 @@ public final class BiospheresStructureRouting {
 		return BiospheresStructureConfinement.isWithinSphere(projectedBox, sphere, fit.shellMargin());
 	}
 
+	public boolean canAccept(Identifier structureId, BlockBox projectedBox, BiospheresSphereDescriptor sphere) {
+		Optional<BiospheresStructureFamily> family = this.familyFor(structureId);
+		if (family.isEmpty()) {
+			return true;
+		}
+		if (family.get() == BiospheresStructureFamily.STRONGHOLD || family.get() == BiospheresStructureFamily.MINESHAFT) {
+			return true;
+		}
+		return this.canPlaceProjectedBounds(family.get(), sphere, projectedBox);
+	}
+
 	public boolean canAccept(StructureStart start, BiospheresSphereDescriptor sphere, DynamicRegistryManager registryManager) {
 		Optional<BiospheresStructureFamily> family = this.familyFor(start, registryManager);
 		if (family.isEmpty()) {
-			return false;
+			return true;
 		}
 		return this.canPlaceProjectedBounds(family.get(), sphere, start.getBoundingBox());
 	}

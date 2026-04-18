@@ -3,16 +3,27 @@ package xyz.coolsa.biosphere;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import net.minecraft.SharedConstants;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.registry.DynamicRegistryManager;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.registry.tag.BiomeTags;
+import net.minecraft.structure.StructureSet;
+import net.minecraft.structure.StructureStart;
+import net.minecraft.structure.StructureTemplateManager;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
+import net.minecraft.util.math.ChunkSectionPos;
 import net.minecraft.util.math.noise.OctavePerlinNoiseSampler;
+import net.minecraft.util.math.random.CheckedRandom;
+import net.minecraft.util.math.random.ChunkRandom;
 import net.minecraft.util.math.random.Random;
+import net.minecraft.world.World;
 import net.minecraft.world.ChunkRegion;
 import net.minecraft.world.HeightLimitView;
 import net.minecraft.world.Heightmap;
@@ -26,17 +37,25 @@ import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.gen.StructureAccessor;
 import net.minecraft.world.gen.chunk.Blender;
 import net.minecraft.world.gen.chunk.ChunkGenerator;
+import net.minecraft.world.gen.chunk.ChunkGeneratorSettings;
+import net.minecraft.world.gen.chunk.NoiseChunkGenerator;
+import net.minecraft.world.gen.chunk.placement.StructurePlacement;
+import net.minecraft.world.gen.chunk.placement.StructurePlacementCalculator;
 import net.minecraft.world.gen.chunk.VerticalBlockSample;
 import net.minecraft.world.gen.noise.NoiseConfig;
+import net.minecraft.world.gen.structure.Structure;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.Predicate;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.IntStream;
 
 public final class BiospheresChunkGenerator extends ChunkGenerator {
 	public static final MapCodec<BiospheresChunkGenerator> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		BiomeSource.CODEC.fieldOf("biome_source").forGetter(BiospheresChunkGenerator::getBiomeSource),
-		Codec.INT.optionalFieldOf("sphere_distance", 128).forGetter(BiospheresChunkGenerator::getSphereDistance),
+		Codec.INT.optionalFieldOf("sphere_distance", 384).forGetter(BiospheresChunkGenerator::getSphereDistance),
 		Codec.INT.optionalFieldOf("min_sphere_radius", 20).forGetter(BiospheresChunkGenerator::getMinSphereRadius),
 		Codec.INT.optionalFieldOf("max_sphere_radius", 160).forGetter(BiospheresChunkGenerator::getMaxSphereRadius),
 		Codec.INT.optionalFieldOf("lake_radius", 16).forGetter(BiospheresChunkGenerator::getLakeRadius),
@@ -66,6 +85,7 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 	private final BlockState defaultFluid;
 	private final BlockState defaultBridge;
 	private final BlockState defaultEdge;
+	private volatile NoiseChunkGenerator carverDelegate;
 
 	public BiospheresChunkGenerator(
 		BiomeSource biomeSource,
@@ -220,6 +240,28 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 
 	@Override
 	public void carve(ChunkRegion chunkRegion, long seed, NoiseConfig noiseConfig, BiomeAccess biomeAccess, StructureAccessor structureAccessor, Chunk chunk) {
+		this.getOrCreateCarverDelegate(chunkRegion).carve(chunkRegion, seed, noiseConfig, biomeAccess, structureAccessor, chunk);
+	}
+
+	private NoiseChunkGenerator getOrCreateCarverDelegate(ChunkRegion chunkRegion) {
+		NoiseChunkGenerator delegate = this.carverDelegate;
+		if (delegate != null) {
+			return delegate;
+		}
+
+			synchronized (this) {
+				delegate = this.carverDelegate;
+				if (delegate == null) {
+					RegistryEntry<ChunkGeneratorSettings> overworldSettings = chunkRegion.getRegistryManager()
+						.getOrThrow(RegistryKeys.CHUNK_GENERATOR_SETTINGS)
+						.getOrThrow(ChunkGeneratorSettings.OVERWORLD);
+
+					delegate = new NoiseChunkGenerator(this.getBiomeSource(), overworldSettings);
+					this.carverDelegate = delegate;
+				}
+		}
+
+		return delegate;
 	}
 
 	@Override
@@ -228,22 +270,41 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 
 	@Override
 	public void generateFeatures(StructureWorldAccess world, Chunk chunk, StructureAccessor structureAccessor) {
-		if (!this.canGenerateStructureFeatures(world, chunk, structureAccessor)) {
-			return;
-		}
-
 		super.generateFeatures(world, chunk, structureAccessor);
 		this.finishBiospheres(world, chunk, structureAccessor);
 	}
 
-	private boolean canGenerateStructureFeatures(StructureWorldAccess world, Chunk chunk, StructureAccessor structureAccessor) {
-		if (!structureAccessor.shouldGenerateStructures()) {
-			return false;
+	@Override
+	public void setStructureStarts(
+		DynamicRegistryManager registryManager,
+		StructurePlacementCalculator placementCalculator,
+		StructureAccessor structureAccessor,
+		Chunk chunk,
+		StructureTemplateManager structureTemplateManager,
+		RegistryKey<World> dimension
+	) {
+		if (SharedConstants.DISABLE_STRUCTURES) {
+			return;
 		}
 
-		BiospheresSphereDescriptor sphere = this.layout.resolve(chunk.getPos().getCenterX(), chunk.getPos().getCenterZ());
-		return structureAccessor.getStructureStarts(chunk.getPos(), structure -> true).stream()
-			.allMatch(start -> this.structureRouting.canAccept(start, sphere, world.getServer().getRegistryManager()));
+		ChunkPos chunkPos = chunk.getPos();
+		ChunkSectionPos sectionPos = ChunkSectionPos.from(chunk);
+		NoiseConfig noiseConfig = placementCalculator.getNoiseConfig();
+
+		for (RegistryEntry<StructureSet> structureSetEntry : placementCalculator.getStructureSets()) {
+			this.trySetStructureStarts(
+				structureSetEntry,
+				registryManager,
+				placementCalculator,
+				structureAccessor,
+				chunk,
+				chunkPos,
+				sectionPos,
+				noiseConfig,
+				structureTemplateManager,
+				dimension
+			);
+		}
 	}
 
 	@Override
@@ -315,16 +376,13 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 							continue;
 						}
 
-						BlockState blockState = y * (1.0D + (double) y / (double) centerPos.getY()) >= centerPos.getY()
-							? Blocks.GLASS.getDefaultState()
-							: this.defaultBlock;
-						world.setBlockState(current.set(x, y, z), blockState, 0);
-					}
+					world.setBlockState(current.set(x, y, z), Blocks.GLASS.getDefaultState(), 0);
+				}
 
-					for (int y = 0; y <= centerPos.getY() + (int) largerSphereHalfHeight; y++) {
-						double newRadialDistance = Math.sqrt(centerPos.getSquaredDistance(x, y, z));
-						if (newRadialDistance >= centerDescriptor.radius()) {
-							world.setBlockState(current.set(x, y, z), Blocks.AIR.getDefaultState(), 0);
+				for (int y = this.minimumY; y <= centerPos.getY() + (int) largerSphereHalfHeight; y++) {
+					double newRadialDistance = Math.sqrt(centerPos.getSquaredDistance(x, y, z));
+					if (newRadialDistance >= centerDescriptor.radius()) {
+						world.setBlockState(current.set(x, y, z), Blocks.AIR.getDefaultState(), 0);
 						}
 					}
 				}
@@ -336,6 +394,140 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 
 	private BlockPos getNearestSphereCenter(long seed, int x, int z) {
 		return this.layout.resolve(x, z).centerPos();
+	}
+
+	private void trySetStructureStarts(
+		RegistryEntry<StructureSet> structureSetEntry,
+		DynamicRegistryManager registryManager,
+		StructurePlacementCalculator placementCalculator,
+		StructureAccessor structureAccessor,
+		Chunk chunk,
+		ChunkPos chunkPos,
+		ChunkSectionPos sectionPos,
+		NoiseConfig noiseConfig,
+		StructureTemplateManager structureTemplateManager,
+		RegistryKey<World> dimension
+	) {
+		StructureSet structureSet = structureSetEntry.value();
+		StructurePlacement placement = structureSet.placement();
+		List<StructureSet.WeightedEntry> weightedEntries = structureSet.structures();
+
+		for (StructureSet.WeightedEntry weightedEntry : weightedEntries) {
+			Structure structure = weightedEntry.structure().value();
+			StructureStart existingStart = structureAccessor.getStructureStart(sectionPos, structure, chunk);
+			if (existingStart != null && existingStart.hasChildren()) {
+				return;
+			}
+		}
+
+		if (!placement.shouldGenerate(placementCalculator, chunkPos.x, chunkPos.z)) {
+			return;
+		}
+
+		long structureSeed = placementCalculator.getStructureSeed();
+		if (weightedEntries.size() == 1) {
+			this.trySetStructureStart(
+				weightedEntries.getFirst(),
+				registryManager,
+				noiseConfig,
+				structureTemplateManager,
+				structureSeed,
+				structureAccessor,
+				chunk,
+				chunkPos,
+				sectionPos,
+				dimension
+			);
+			return;
+		}
+
+		ArrayList<StructureSet.WeightedEntry> candidates = new ArrayList<>(weightedEntries);
+		ChunkRandom random = new ChunkRandom(new CheckedRandom(0L));
+		random.setCarverSeed(structureSeed, chunkPos.x, chunkPos.z);
+		int totalWeight = 0;
+		for (StructureSet.WeightedEntry weightedEntry : candidates) {
+			totalWeight += weightedEntry.weight();
+		}
+
+		while (!candidates.isEmpty()) {
+			int target = random.nextInt(totalWeight);
+			int index = 0;
+			for (; index < candidates.size(); index++) {
+				target -= candidates.get(index).weight();
+				if (target < 0) {
+					break;
+				}
+			}
+
+			StructureSet.WeightedEntry candidate = candidates.get(index);
+			if (this.trySetStructureStart(
+				candidate,
+				registryManager,
+				noiseConfig,
+				structureTemplateManager,
+				structureSeed,
+				structureAccessor,
+				chunk,
+				chunkPos,
+				sectionPos,
+				dimension
+			)) {
+				return;
+			}
+
+			candidates.remove(index);
+			totalWeight -= candidate.weight();
+		}
+	}
+
+	private boolean trySetStructureStart(
+		StructureSet.WeightedEntry weightedEntry,
+		DynamicRegistryManager registryManager,
+		NoiseConfig noiseConfig,
+		StructureTemplateManager structureTemplateManager,
+		long structureSeed,
+		StructureAccessor structureAccessor,
+		Chunk chunk,
+		ChunkPos chunkPos,
+		ChunkSectionPos sectionPos,
+		RegistryKey<World> dimension
+	) {
+		RegistryEntry<Structure> structureEntry = weightedEntry.structure();
+		Structure structure = structureEntry.value();
+		int references = this.getStructureReferences(structureAccessor, chunk, sectionPos, structure);
+		Predicate<RegistryEntry<Biome>> validBiomePredicate = structure.getValidBiomes()::contains;
+		StructureStart start = structure.createStructureStart(
+			structureEntry,
+			dimension,
+			registryManager,
+			this,
+			this.biomeSource,
+			noiseConfig,
+			structureTemplateManager,
+			structureSeed,
+			chunkPos,
+			references,
+			chunk,
+			validBiomePredicate
+		);
+		if (!start.hasChildren()) {
+			return false;
+		}
+
+		Optional<Identifier> structureId = structureEntry.getKey().map(RegistryKey::getValue);
+		BlockPos structureCenter = start.getBoundingBox().getCenter();
+		BiospheresSphereDescriptor sphere = this.layout.resolve(structureCenter.getX(), structureCenter.getZ());
+		if (structureId.isPresent() && !this.structureRouting.canAccept(structureId.get(), start.getBoundingBox(), sphere)) {
+			return false;
+		}
+
+		structureAccessor.setStructureStart(sectionPos, structure, start, chunk);
+		return true;
+	}
+
+	private int getStructureReferences(StructureAccessor structureAccessor, Chunk chunk, ChunkSectionPos sectionPos, Structure structure) {
+		StructureStart existingStart = structureAccessor.getStructureStart(sectionPos, structure, chunk);
+		return existingStart != null ? existingStart.getReferences() : 0;
 	}
 
 	private BlockPos[] getClosestSpheres(long seed, BlockPos centerPos) {
@@ -357,33 +549,38 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 		double radialDistance = Math.sqrt(centerPos.getSquaredDistance(pos.getX(), centerPos.getY(), pos.getZ()));
 		BiospheresSphereDescriptor centerDescriptor = this.layout.resolve(centerPos.getX(), centerPos.getZ());
 		for (int i = 0; i < 4; i++) {
+			if (i == 1 || i == 3) {
+				continue;
+			}
+
+			BiospheresSphereDescriptor neighborDescriptor = this.layout.resolve(nesw[i].getX(), nesw[i].getZ());
 			if (radialDistance > centerDescriptor.radius() - 2) {
 				double slope = nesw[i].getY() - centerPos.getY();
 				double currentPos = 0;
 				switch (i) {
 					case 0 -> {
-						slope /= Math.abs((double) (centerPos.getZ() - nesw[i].getZ())) - 2 * centerDescriptor.radius();
+						slope /= BiospheresSphereMath.bridgeGap(centerPos.getX(), nesw[i].getX(), centerDescriptor.radius(), neighborDescriptor.radius());
 						currentPos = centerPos.getX() - pos.getX() + centerDescriptor.radius();
 						if (pos.getZ() <= centerPos.getZ() + 2 && pos.getZ() >= centerPos.getZ() - 2 && pos.getX() > centerPos.getX()) {
 							this.fillBridgeSlice(new BlockPos(pos.getX(), (int) (slope * currentPos + centerPos.getY()), pos.getZ()), world, current);
 						}
 					}
 					case 1 -> {
-						slope /= -Math.abs((double) (centerPos.getZ() - nesw[i].getZ())) + 2 * centerDescriptor.radius();
+						slope /= BiospheresSphereMath.bridgeGap(centerPos.getX(), nesw[i].getX(), centerDescriptor.radius(), neighborDescriptor.radius());
 						currentPos = centerPos.getX() - pos.getX() - centerDescriptor.radius();
 						if (pos.getZ() <= centerPos.getZ() + 2 && pos.getZ() >= centerPos.getZ() - 2 && pos.getX() < centerPos.getX()) {
 							this.fillBridgeSlice(new BlockPos(pos.getX(), (int) (slope * currentPos + centerPos.getY()), pos.getZ()), world, current);
 						}
 					}
 					case 2 -> {
-						slope /= -Math.abs((double) (centerPos.getZ() - nesw[i].getZ())) + 2 * centerDescriptor.radius();
+						slope /= BiospheresSphereMath.bridgeGap(centerPos.getZ(), nesw[i].getZ(), centerDescriptor.radius(), neighborDescriptor.radius());
 						currentPos = centerPos.getZ() - pos.getZ() + centerDescriptor.radius();
 						if (pos.getX() <= centerPos.getX() + 2 && pos.getX() >= centerPos.getX() - 2 && pos.getZ() > centerPos.getZ()) {
 							this.fillBridgeSlice(new BlockPos(pos.getX(), (int) (slope * currentPos + centerPos.getY()), pos.getZ()), world, current);
 						}
 					}
 					case 3 -> {
-						slope /= Math.abs((double) (centerPos.getZ() - nesw[i].getZ())) - 2 * centerDescriptor.radius();
+						slope /= BiospheresSphereMath.bridgeGap(centerPos.getZ(), nesw[i].getZ(), centerDescriptor.radius(), neighborDescriptor.radius());
 						currentPos = centerPos.getZ() - pos.getZ() - centerDescriptor.radius();
 						if (pos.getX() <= centerPos.getX() + 2 && pos.getX() >= centerPos.getX() - 2 && pos.getZ() < centerPos.getZ()) {
 							this.fillBridgeSlice(new BlockPos(pos.getX(), (int) (slope * currentPos + centerPos.getY()), pos.getZ()), world, current);

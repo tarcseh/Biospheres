@@ -91,4 +91,10 @@ class BiospheresSphereMathTest {
         assertTrue(BiospheresSphereMath.hasLake(new MultiNoiseUtil.NoiseValuePoint(0L, 0L, 5L, 0L, 0L, 0L)));
         assertFalse(BiospheresSphereMath.hasLake(new MultiNoiseUtil.NoiseValuePoint(0L, 0L, 4L, 0L, 0L, 0L)));
     }
+
+    @Test
+    void computesPositiveBridgeGapBetweenDifferentSphereSizes() {
+        assertEquals(64, BiospheresSphereMath.bridgeGap(0, 384, 160, 160));
+        assertEquals(166, BiospheresSphereMath.bridgeGap(0, 384, 80, 138));
+    }
 }

@@ -86,6 +86,21 @@ class BiospheresWorldPresetCodecTest {
 		assertEquals(160, generator.getAsJsonObject().get("max_sphere_radius").getAsInt());
 	}
 
+	@Test
+	void worldPresetKeepsSphereSpacingBeyondMaximumDiameter() throws Exception {
+		JsonElement preset = JsonParser.parseString(Files.readString(Path.of("src/main/resources/data/biospheres/worldgen/world_preset/biospheres.json")));
+		JsonElement generator = preset.getAsJsonObject()
+			.getAsJsonObject("dimensions")
+			.getAsJsonObject("minecraft:overworld")
+			.getAsJsonObject("generator");
+
+		int sphereDistance = generator.getAsJsonObject().get("sphere_distance").getAsInt();
+		int maxSphereRadius = generator.getAsJsonObject().get("max_sphere_radius").getAsInt();
+
+		assertTrue(sphereDistance > maxSphereRadius * 2,
+			() -> "sphere_distance must leave space between maximum-size spheres");
+	}
+
 	private static BiospheresBiomeSource.CodecData decodeCodecData(String json) {
 		RegistryOps<JsonElement> ops = RegistryOps.of(JsonOps.INSTANCE, new RegistryInfoGetter() {
 			@Override
