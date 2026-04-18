@@ -101,6 +101,8 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 	private final BlockState defaultBridge;
 	private final BlockState defaultEdge;
 	private volatile NoiseChunkGenerator carverDelegate;
+	private volatile NoiseConfig cachedHeightNoiseConfig;
+	private volatile OctavePerlinNoiseSampler cachedHeightSampler;
 
 	public BiospheresChunkGenerator(
 		BiomeSource biomeSource,
@@ -355,17 +357,39 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 			- (center.getZ() - z) * (double) (center.getZ() - z));
 		int topY = center.getY() + (int) sphereHalfHeight;
 		int bottomY = center.getY() - (int) sphereHalfHeight;
-		OctavePerlinNoiseSampler terrainNoise = this.createTerrainSampler(noiseConfig);
+		OctavePerlinNoiseSampler terrainNoise = this.getOrCreateHeightSampler(noiseConfig);
 		double columnNoise = terrainNoise.sample(x / 8.0D, 0.0D, z / 8.0D) / 8.0D;
+		int noiseSurfaceY = this.solveSolidSurfaceY(center.getY(), columnNoise);
+		if (noiseSurfaceY < bottomY) {
+			return this.minimumY;
+		}
+		return Math.min(topY, noiseSurfaceY);
+	}
 
-		for (int y = topY; y >= bottomY; y--) {
-			double threshold = columnNoise + (double) y / (double) center.getY();
-			if (y * threshold < center.getY()) {
-				return y;
-			}
+	private OctavePerlinNoiseSampler getOrCreateHeightSampler(NoiseConfig noiseConfig) {
+		OctavePerlinNoiseSampler sampler = this.cachedHeightSampler;
+		if (sampler != null && this.cachedHeightNoiseConfig == noiseConfig) {
+			return sampler;
 		}
 
-		return this.minimumY;
+		synchronized (this) {
+			sampler = this.cachedHeightSampler;
+			if (sampler != null && this.cachedHeightNoiseConfig == noiseConfig) {
+				return sampler;
+			}
+
+			sampler = this.createTerrainSampler(noiseConfig);
+			this.cachedHeightNoiseConfig = noiseConfig;
+			this.cachedHeightSampler = sampler;
+			return sampler;
+		}
+	}
+
+	private int solveSolidSurfaceY(int centerY, double columnNoise) {
+		double b = centerY * columnNoise;
+		double discriminant = b * b + 4.0D * centerY * centerY;
+		double root = (-b + Math.sqrt(discriminant)) / 2.0D;
+		return (int) Math.floor(root);
 	}
 
 	@Override
