@@ -34,9 +34,9 @@ class BiospheresWorldPresetCodecTest {
 			{
 			  "biomes": [],
 			  "void_biome": "minecraft:the_void",
-			  "sphere_distance": 128,
-			  "min_sphere_radius": 20,
-			  "max_sphere_radius": 160
+			  "sphere_distance": 480,
+			  "min_sphere_radius": 160,
+			  "max_sphere_radius": 224
 			}
 			""";
 
@@ -54,8 +54,24 @@ class BiospheresWorldPresetCodecTest {
 
 		BiospheresBiomeSource.CodecData data = decodeCodecData(json);
 
-		assertEquals(20, data.minSphereRadius());
-		assertEquals(160, data.maxSphereRadius());
+		assertEquals(480, data.sphereDistance());
+		assertEquals(160, data.minSphereRadius());
+		assertEquals(224, data.maxSphereRadius());
+	}
+
+	@Test
+	void rejectsBiomeSourceWhenSphereDistanceWouldAllowAdjacentSpheresToOverlap() {
+		String json = """
+			{
+			  "biomes": [],
+			  "void_biome": "minecraft:the_void",
+			  "sphere_distance": 200,
+			  "min_sphere_radius": 80,
+			  "max_sphere_radius": 160
+			}
+			""";
+
+		assertThrows(IllegalStateException.class, () -> decodeCodecData(json));
 	}
 
 	@Test
@@ -81,9 +97,13 @@ class BiospheresWorldPresetCodecTest {
 			.getAsJsonObject("minecraft:overworld")
 			.getAsJsonObject("generator");
 
+		int minSphereRadius = generator.getAsJsonObject().get("min_sphere_radius").getAsInt();
+
 		assertTrue(generator.getAsJsonObject().get("max_sphere_radius").getAsInt() >= BiospheresStructureBoundsCatalog.largestRequiredHorizontalRadius());
-		assertEquals(20, generator.getAsJsonObject().get("min_sphere_radius").getAsInt());
-		assertEquals(160, generator.getAsJsonObject().get("max_sphere_radius").getAsInt());
+		assertTrue(minSphereRadius >= BiospheresStructureBoundsCatalog.largestRequiredHorizontalRadius(),
+			() -> "min_sphere_radius must be large enough that even the smallest sphere can host the largest structure");
+		assertEquals(160, minSphereRadius);
+		assertEquals(224, generator.getAsJsonObject().get("max_sphere_radius").getAsInt());
 	}
 
 	@Test
@@ -97,8 +117,8 @@ class BiospheresWorldPresetCodecTest {
 		int sphereDistance = generator.getAsJsonObject().get("sphere_distance").getAsInt();
 		int maxSphereRadius = generator.getAsJsonObject().get("max_sphere_radius").getAsInt();
 
-		assertTrue(sphereDistance > maxSphereRadius * 2,
-			() -> "sphere_distance must leave space between maximum-size spheres");
+		assertTrue(sphereDistance >= maxSphereRadius * 2,
+			() -> "sphere_distance must leave space between maximum-size spheres so adjacent spheres never overlap");
 	}
 
 	private static BiospheresBiomeSource.CodecData decodeCodecData(String json) {

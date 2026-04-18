@@ -4,9 +4,9 @@
       "type": "minecraft:overworld",
       "generator": {
         "type": "biospheres:biosphere",
-		"sphere_distance": 384,
-        "min_sphere_radius": 20,
-        "max_sphere_radius": 160,
+        "sphere_distance": 480,
+        "min_sphere_radius": 160,
+        "max_sphere_radius": 224,
         "lake_radius": 16,
         "shore_radius": 6,
         "minimum_y": -64,
@@ -17,9 +17,9 @@
         "default_edge": "minecraft:oak_fence",
         "biome_source": {
           "type": "biospheres:sphere_biomes",
-			"sphere_distance": 384,
-          "min_sphere_radius": 20,
-          "max_sphere_radius": 160,
+          "sphere_distance": 480,
+          "min_sphere_radius": 160,
+          "max_sphere_radius": 224,
           "void_biome": "minecraft:the_void",
           "biomes": [
             "minecraft:plains",

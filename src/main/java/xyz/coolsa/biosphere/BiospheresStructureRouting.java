@@ -102,12 +102,12 @@ public final class BiospheresStructureRouting {
 			return sphere.radius() >= 128 && this.canPlaceProjectedBounds(family.get(), sphere, projectedBox);
 		}
 		if (family.get() == BiospheresStructureFamily.MINESHAFT) {
-			return projectedBox.getMinY() >= sphere.centerY() - sphere.radius()
-				&& projectedBox.getMaxY() <= sphere.centerY() + sphere.radius();
+			BiospheresStructureFit fit = this.policy.fitFor(family.get());
+			return BiospheresStructureConfinement.isHorizontallyWithinSphere(projectedBox, sphere, fit.shellMargin(), 32);
 		}
 		if (family.get() == BiospheresStructureFamily.STRONGHOLD) {
-			return projectedBox.getMinY() >= sphere.centerY() - sphere.radius()
-				&& projectedBox.getMaxY() <= sphere.centerY() + sphere.radius();
+			BiospheresStructureFit fit = this.policy.fitFor(family.get());
+			return BiospheresStructureConfinement.isHorizontallyWithinSphere(projectedBox, sphere, fit.shellMargin(), 32);
 		}
 		return this.canPlaceProjectedBounds(family.get(), sphere, projectedBox);
 	}

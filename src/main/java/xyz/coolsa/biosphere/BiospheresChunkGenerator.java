@@ -1,6 +1,7 @@
 package xyz.coolsa.biosphere;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.DataResult;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.mojang.datafixers.util.Pair;
@@ -57,11 +58,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.IntStream;
 
 public final class BiospheresChunkGenerator extends ChunkGenerator {
-	public static final MapCodec<BiospheresChunkGenerator> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
+	public static final MapCodec<BiospheresChunkGenerator> CODEC = RecordCodecBuilder.<BiospheresChunkGenerator>mapCodec(instance -> instance.group(
 		BiomeSource.CODEC.fieldOf("biome_source").forGetter(BiospheresChunkGenerator::getBiomeSource),
-		Codec.INT.optionalFieldOf("sphere_distance", 384).forGetter(BiospheresChunkGenerator::getSphereDistance),
-		Codec.INT.optionalFieldOf("min_sphere_radius", 20).forGetter(BiospheresChunkGenerator::getMinSphereRadius),
-		Codec.INT.optionalFieldOf("max_sphere_radius", 160).forGetter(BiospheresChunkGenerator::getMaxSphereRadius),
+		Codec.INT.optionalFieldOf("sphere_distance", 480).forGetter(BiospheresChunkGenerator::getSphereDistance),
+		Codec.INT.optionalFieldOf("min_sphere_radius", 160).forGetter(BiospheresChunkGenerator::getMinSphereRadius),
+		Codec.INT.optionalFieldOf("max_sphere_radius", 224).forGetter(BiospheresChunkGenerator::getMaxSphereRadius),
 		Codec.INT.optionalFieldOf("lake_radius", 16).forGetter(BiospheresChunkGenerator::getLakeRadius),
 		Codec.INT.optionalFieldOf("shore_radius", 6).forGetter(BiospheresChunkGenerator::getShoreRadius),
 		Codec.INT.optionalFieldOf("minimum_y", -64).forGetter(BiospheresChunkGenerator::getMinimumY),
@@ -70,7 +71,17 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 		Identifier.CODEC.optionalFieldOf("default_fluid", Identifier.ofVanilla("water")).forGetter(BiospheresChunkGenerator::getDefaultFluidId),
 		Identifier.CODEC.optionalFieldOf("default_bridge", Identifier.ofVanilla("oak_planks")).forGetter(BiospheresChunkGenerator::getDefaultBridgeId),
 		Identifier.CODEC.optionalFieldOf("default_edge", Identifier.ofVanilla("oak_fence")).forGetter(BiospheresChunkGenerator::getDefaultEdgeId)
-	).apply(instance, BiospheresChunkGenerator::new));
+	).apply(instance, BiospheresChunkGenerator::new)).validate(generator -> {
+		if (generator.maxSphereRadius < generator.minSphereRadius) {
+			return DataResult.error(() -> "max_sphere_radius must be >= min_sphere_radius");
+		}
+
+		if (generator.sphereDistance < generator.maxSphereRadius * 2) {
+			return DataResult.error(() -> "sphere_distance must be >= 2 * max_sphere_radius to keep adjacent spheres from overlapping");
+		}
+
+		return DataResult.success(generator);
+	});
 
 	private final int sphereDistance;
 	private final int minSphereRadius;
@@ -294,10 +305,10 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 		BiospheresSphereDescriptor sphere = this.layout.resolve(vanillaResult.getFirst().getX(), vanillaResult.getFirst().getZ());
 		BlockBox locateBox = new BlockBox(
 			vanillaResult.getFirst().getX() - 16,
-			sphere.centerY() - sphere.radius(),
+			vanillaResult.getFirst().getY() - 16,
 			vanillaResult.getFirst().getZ() - 16,
 			vanillaResult.getFirst().getX() + 16,
-			sphere.centerY() + sphere.radius(),
+			vanillaResult.getFirst().getY() + 16,
 			vanillaResult.getFirst().getZ() + 16
 		);
 
@@ -611,25 +622,25 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 	private void makeBridges(BlockPos pos, BlockPos centerPos, BlockPos[] nesw, StructureWorldAccess world, BlockPos.Mutable current) {
 		BiospheresSphereDescriptor centerDescriptor = this.layout.resolve(centerPos.getX(), centerPos.getZ());
 		for (int i = 0; i < 4; i++) {
-			if (i == 1 || i == 3) {
-				continue;
-			}
-
 			BiospheresSphereDescriptor neighborDescriptor = this.layout.resolve(nesw[i].getX(), nesw[i].getZ());
 
-			if (i == 0) {
+			if (i == 0 || i == 1) {
 				int startX = BiospheresSphereMath.bridgeStartCoord(centerPos.getX(), centerDescriptor.radius(), nesw[i].getX());
 				int endX = BiospheresSphereMath.bridgeEndCoord(nesw[i].getX(), neighborDescriptor.radius(), centerPos.getX());
-				if (pos.getZ() >= centerPos.getZ() - 2 && pos.getZ() <= centerPos.getZ() + 2 && pos.getX() >= startX && pos.getX() <= endX) {
+				int minX = Math.min(startX, endX);
+				int maxX = Math.max(startX, endX);
+				if (pos.getZ() >= centerPos.getZ() - 2 && pos.getZ() <= centerPos.getZ() + 2 && pos.getX() >= minX && pos.getX() <= maxX) {
 					int bridgeY = BiospheresSphereMath.interpolateBridgeY(centerPos.getY(), nesw[i].getY(), startX, endX, pos.getX());
 					this.fillBridgeSlice(new BlockPos(pos.getX(), bridgeY, pos.getZ()), world, current);
 				}
 			}
 
-			if (i == 2) {
+			if (i == 2 || i == 3) {
 				int startZ = BiospheresSphereMath.bridgeStartCoord(centerPos.getZ(), centerDescriptor.radius(), nesw[i].getZ());
 				int endZ = BiospheresSphereMath.bridgeEndCoord(nesw[i].getZ(), neighborDescriptor.radius(), centerPos.getZ());
-				if (pos.getX() >= centerPos.getX() - 2 && pos.getX() <= centerPos.getX() + 2 && pos.getZ() >= startZ && pos.getZ() <= endZ) {
+				int minZ = Math.min(startZ, endZ);
+				int maxZ = Math.max(startZ, endZ);
+				if (pos.getX() >= centerPos.getX() - 2 && pos.getX() <= centerPos.getX() + 2 && pos.getZ() >= minZ && pos.getZ() <= maxZ) {
 					int bridgeY = BiospheresSphereMath.interpolateBridgeY(centerPos.getY(), nesw[i].getY(), startZ, endZ, pos.getZ());
 					this.fillBridgeSlice(new BlockPos(pos.getX(), bridgeY, pos.getZ()), world, current);
 				}

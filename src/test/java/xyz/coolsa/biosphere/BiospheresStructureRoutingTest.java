@@ -90,4 +90,20 @@ class BiospheresStructureRoutingTest {
 		assertFalse(BiospheresStructureRouting.defaultRouting().canAccept(Identifier.of("minecraft", "woodland_mansion"), projectedBox, sphere));
 	}
 
+	@Test
+	void rejectsStrongholdsThatExtendHorizontallyOutsideTheSphere() {
+		BiospheresSphereDescriptor sphere = new BiospheresSphereDescriptor(0, 100, 0, 96, 97, 94, 16);
+		BlockBox projectedBox = new BlockBox(-200, 16, -200, -120, 184, -120);
+
+		assertFalse(BiospheresStructureRouting.defaultRouting().canAccept(Identifier.of("minecraft", "stronghold"), projectedBox, sphere));
+	}
+
+	@Test
+	void rejectsMineshaftsThatExtendHorizontallyOutsideTheSphere() {
+		BiospheresSphereDescriptor sphere = new BiospheresSphereDescriptor(0, 100, 0, 96, 97, 94, 16);
+		BlockBox projectedBox = new BlockBox(-200, 16, -200, -120, 184, -120);
+
+		assertFalse(BiospheresStructureRouting.defaultRouting().canAccept(Identifier.of("minecraft", "mineshaft"), projectedBox, sphere));
+	}
+
 }

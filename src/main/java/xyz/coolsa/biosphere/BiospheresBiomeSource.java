@@ -25,12 +25,16 @@ public final class BiospheresBiomeSource extends BiomeSource {
 		public static final MapCodec<CodecData> CODEC = RecordCodecBuilder.<CodecData>mapCodec(instance -> instance.group(
 			RegistryFixedCodec.of(RegistryKeys.BIOME).listOf().fieldOf("biomes").forGetter(CodecData::biomes),
 			RegistryFixedCodec.of(RegistryKeys.BIOME).fieldOf("void_biome").forGetter(CodecData::voidBiome),
-			Codec.INT.optionalFieldOf("sphere_distance", 384).forGetter(CodecData::sphereDistance),
-			Codec.INT.optionalFieldOf("min_sphere_radius", 20).forGetter(CodecData::minSphereRadius),
-			Codec.INT.optionalFieldOf("max_sphere_radius", 160).forGetter(CodecData::maxSphereRadius)
+			Codec.INT.optionalFieldOf("sphere_distance", 480).forGetter(CodecData::sphereDistance),
+			Codec.INT.optionalFieldOf("min_sphere_radius", 160).forGetter(CodecData::minSphereRadius),
+			Codec.INT.optionalFieldOf("max_sphere_radius", 224).forGetter(CodecData::maxSphereRadius)
 		).apply(instance, CodecData::new)).validate(data -> {
 			if (data.maxSphereRadius < data.minSphereRadius) {
 				return DataResult.error(() -> "max_sphere_radius must be >= min_sphere_radius");
+			}
+
+			if (data.sphereDistance < data.maxSphereRadius * 2) {
+				return DataResult.error(() -> "sphere_distance must be >= 2 * max_sphere_radius to keep adjacent spheres from overlapping");
 			}
 
 			return DataResult.success(data);
