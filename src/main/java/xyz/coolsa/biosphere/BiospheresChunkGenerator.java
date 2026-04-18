@@ -538,7 +538,7 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 		Structure structure = structureEntry.value();
 		int references = this.getStructureReferences(structureAccessor, chunk, sectionPos, structure);
 		Optional<Identifier> structureId = structureEntry.getKey().map(RegistryKey::getValue);
-		Predicate<RegistryEntry<Biome>> validBiomePredicate = this.shouldBypassBiomeGate(structureId) ? biome -> true : structure.getValidBiomes()::contains;
+		Predicate<RegistryEntry<Biome>> validBiomePredicate = structure.getValidBiomes()::contains;
 		StructureStart start = structure.createStructureStart(
 			structureEntry,
 			dimension,
@@ -565,18 +565,6 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 
 		structureAccessor.setStructureStart(sectionPos, structure, start, chunk);
 		return true;
-	}
-
-	private boolean shouldBypassBiomeGate(Optional<Identifier> structureId) {
-		if (structureId.isEmpty()) {
-			return false;
-		}
-		Optional<BiospheresStructureFamily> family = this.structureRouting.familyFor(structureId.get());
-		if (family.isEmpty()) {
-			return false;
-		}
-
-		return family.get() != BiospheresStructureFamily.TRIAL_CHAMBERS;
 	}
 
 	private int getStructureReferences(StructureAccessor structureAccessor, Chunk chunk, ChunkSectionPos sectionPos, Structure structure) {
