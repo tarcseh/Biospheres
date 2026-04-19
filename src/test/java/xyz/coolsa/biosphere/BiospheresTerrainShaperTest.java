@@ -12,12 +12,13 @@ class BiospheresTerrainShaperTest {
 		BiospheresSphereDescriptor sphere,
 		double relief,
 		double valley,
+		double river,
 		boolean lakeCapable,
 		BiospheresTerrainShaper.TerrainFamily family
 	) {
 		int bottom = sphere.centerY() - sphere.radius();
 		int ceiling = sphere.centerY() + sphere.radius();
-		return shaper.shapeColumn(sphere, relief, valley, lakeCapable, family, bottom, ceiling);
+		return shaper.shapeColumn(sphere, relief, valley, river, lakeCapable, family, bottom, ceiling);
 	}
 
 	@Test
@@ -27,6 +28,7 @@ class BiospheresTerrainShaperTest {
 			new BiospheresTerrainShaper(),
 			sphere,
 			0.1D,
+			0.0D,
 			0.0D,
 			false,
 			BiospheresTerrainShaper.TerrainFamily.DEFAULT
@@ -43,6 +45,7 @@ class BiospheresTerrainShaperTest {
 			sphere,
 			0.85D,
 			0.15D,
+			0.0D,
 			false,
 			BiospheresTerrainShaper.TerrainFamily.DEFAULT
 		);
@@ -65,6 +68,7 @@ class BiospheresTerrainShaperTest {
 			sphere,
 			1.0D,
 			0.8D,
+			0.0D,
 			false,
 			BiospheresTerrainShaper.TerrainFamily.MOUNTAIN
 		);
@@ -73,6 +77,7 @@ class BiospheresTerrainShaperTest {
 			sphere,
 			0.2D,
 			-0.2D,
+			0.0D,
 			false,
 			BiospheresTerrainShaper.TerrainFamily.DEFAULT
 		);
@@ -89,6 +94,7 @@ class BiospheresTerrainShaperTest {
 			sphere,
 			0.35D,
 			-0.65D,
+			0.0D,
 			true,
 			BiospheresTerrainShaper.TerrainFamily.DEFAULT
 		);
@@ -107,6 +113,7 @@ class BiospheresTerrainShaperTest {
 			sphere,
 			1.0D,
 			-0.9D,
+			0.0D,
 			true,
 			BiospheresTerrainShaper.TerrainFamily.MOUNTAIN
 		);
@@ -129,6 +136,7 @@ class BiospheresTerrainShaperTest {
 			sphere,
 			0.0D,
 			-0.2D,
+			0.0D,
 			true,
 			BiospheresTerrainShaper.TerrainFamily.OCEAN
 		);
@@ -137,11 +145,74 @@ class BiospheresTerrainShaperTest {
 			sphere,
 			0.0D,
 			-0.2D,
+			0.0D,
 			true,
 			BiospheresTerrainShaper.TerrainFamily.DEFAULT
 		);
 
 		assertTrue(ocean.hasLake());
 		assertTrue(ocean.surfaceY() < land.surfaceY());
+	}
+
+	@Test
+	void riverFamilyCreatesWaterChannelInLowSignalColumns() {
+		BiospheresSphereDescriptor sphere = new BiospheresSphereDescriptor(0, 128, 0, 20, 24, 28, 18);
+		BiospheresTerrainShaper shaper = new BiospheresTerrainShaper();
+		BiospheresTerrainProfile channel = shape(
+			shaper,
+			sphere,
+			0.05D,
+			-0.05D,
+			0.0D,
+			true,
+			BiospheresTerrainShaper.TerrainFamily.RIVER
+		);
+
+		assertTrue(channel.hasLake());
+		assertTrue(channel.lakeTopY() >= channel.lakeFloorY());
+	}
+
+	@Test
+	void riverFamilyKeepsDryBanksForHighRiverSignal() {
+		BiospheresSphereDescriptor sphere = new BiospheresSphereDescriptor(0, 128, 0, 20, 24, 28, 18);
+		BiospheresTerrainShaper shaper = new BiospheresTerrainShaper();
+		BiospheresTerrainProfile bank = shape(
+			shaper,
+			sphere,
+			0.05D,
+			-0.05D,
+			0.62D,
+			true,
+			BiospheresTerrainShaper.TerrainFamily.RIVER
+		);
+
+		assertFalse(bank.hasLake());
+	}
+
+	@Test
+	void oceanFamilyCanRaiseMidSignalIslands() {
+		BiospheresSphereDescriptor sphere = new BiospheresSphereDescriptor(0, 128, 0, 20, 24, 28, 18);
+		BiospheresTerrainShaper shaper = new BiospheresTerrainShaper();
+
+		BiospheresTerrainProfile lowSignalOcean = shape(
+			shaper,
+			sphere,
+			0.0D,
+			-0.2D,
+			0.0D,
+			true,
+			BiospheresTerrainShaper.TerrainFamily.OCEAN
+		);
+		BiospheresTerrainProfile midSignalOcean = shape(
+			shaper,
+			sphere,
+			0.0D,
+			-0.2D,
+			0.45D,
+			true,
+			BiospheresTerrainShaper.TerrainFamily.OCEAN
+		);
+
+		assertTrue(midSignalOcean.surfaceY() > lowSignalOcean.surfaceY());
 	}
 }
