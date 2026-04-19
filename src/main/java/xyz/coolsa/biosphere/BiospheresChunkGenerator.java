@@ -100,6 +100,7 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 	private final BlockState defaultFluid;
 	private final BlockState defaultBridge;
 	private final BlockState defaultEdge;
+	private final BiospheresTerrainShaper terrainShaper;
 	private volatile NoiseChunkGenerator carverDelegate;
 	private volatile NoiseConfig cachedHeightNoiseConfig;
 	private volatile OctavePerlinNoiseSampler cachedHeightSampler;
@@ -136,6 +137,7 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 		this.defaultFluid = Registries.BLOCK.get(defaultFluidId).getDefaultState();
 		this.defaultBridge = Registries.BLOCK.get(defaultBridgeId).getDefaultState();
 		this.defaultEdge = Registries.BLOCK.get(defaultEdgeId).getDefaultState();
+		this.terrainShaper = new BiospheresTerrainShaper();
 	}
 
 	@Override
@@ -161,36 +163,37 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 		return BiospheresSphereMath.isLavaLake(point) ? Blocks.LAVA.getDefaultState() : this.defaultFluid;
 	}
 
+	private BlockState getColumnBlockState(BiospheresTerrainProfile profile, int y, BlockState lakeState) {
+		if (profile.containsLakeAt(y)) {
+			return lakeState.isAir() ? this.defaultFluid : lakeState;
+		}
+		if (profile.containsSolidAt(y)) {
+			return this.defaultBlock;
+		}
+		return Blocks.AIR.getDefaultState();
+	}
+
 	@Override
 	public CompletableFuture<Chunk> populateNoise(Blender blender, NoiseConfig noiseConfig, StructureAccessor structureAccessor, Chunk chunk) {
-		OctavePerlinNoiseSampler terrainNoise = this.createTerrainSampler(noiseConfig);
 		ChunkPos chunkPos = chunk.getPos();
-		BlockPos center = this.getNearestSphereCenter(noiseConfig, chunkPos.getCenterX(), chunkPos.getCenterZ());
-		BlockState lakeState = this.getLakeBlock(noiseConfig, center);
+		int chunkBottomY = chunk.getBottomY();
+		int chunkTopY = chunkBottomY + chunk.getHeight() - 1;
 
 		for (int x = chunkPos.getStartX(); x <= chunkPos.getEndX(); x++) {
 			for (int z = chunkPos.getStartZ(); z <= chunkPos.getEndZ(); z++) {
 				BiospheresSphereDescriptor descriptor = this.layout.resolve(x, z);
-				double radialDistance = Math.sqrt(center.getSquaredDistance(x, center.getY(), z));
-				if (radialDistance > descriptor.radius()) {
+				if (!this.isInsideSphereMask(descriptor, x, z)) {
+					for (int y = chunkBottomY; y <= chunkTopY; y++) {
+						chunk.setBlockState(new BlockPos(x, y, z), Blocks.AIR.getDefaultState(), 0);
+					}
 					continue;
 				}
 
-				double sphereHalfHeight = Math.sqrt((double) descriptor.radius() * descriptor.radius()
-					- (center.getX() - x) * (double) (center.getX() - x)
-					- (center.getZ() - z) * (double) (center.getZ() - z));
-				double columnNoise = terrainNoise.sample(x / 8.0D, 0.0D, z / 8.0D) / 8.0D;
+				BiospheresTerrainProfile profile = this.sampleTerrainProfile(descriptor, x, z, noiseConfig);
+				BlockState lakeState = this.getLakeBlock(noiseConfig, descriptor.centerPos());
 
-				for (int y = center.getY() - (int) sphereHalfHeight; y <= center.getY() + (int) sphereHalfHeight; y++) {
-					double shellDistance = Math.sqrt(center.getSquaredDistance(x, y, z));
-					double threshold = columnNoise + (double) y / (double) center.getY();
-					BlockState state = y * threshold < center.getY() ? this.defaultBlock : Blocks.AIR.getDefaultState();
-
-					if (state.isOf(this.defaultBlock.getBlock()) && shellDistance <= descriptor.lakeRadius() && !lakeState.isAir()) {
-						state = y * threshold >= center.getY() - 1 ? Blocks.AIR.getDefaultState() : lakeState;
-					}
-
-					chunk.setBlockState(new BlockPos(x, y, z), state, 0);
+				for (int y = profile.bottomY(); y <= profile.ceilingY(); y++) {
+					chunk.setBlockState(new BlockPos(x, y, z), this.getColumnBlockState(profile, y, lakeState), 0);
 				}
 			}
 		}
@@ -205,7 +208,12 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 
 		for (int x = chunkPos.getStartX(); x <= chunkPos.getEndX(); x++) {
 			for (int z = chunkPos.getStartZ(); z <= chunkPos.getEndZ(); z++) {
-				int surfaceY = chunk.sampleHeightmap(Heightmap.Type.WORLD_SURFACE_WG, x & 15, z & 15);
+				BiospheresSphereDescriptor descriptor = this.layout.resolve(x, z);
+				if (!this.isInsideSphereMask(descriptor, x, z)) {
+					continue;
+				}
+
+				int surfaceY = this.sampleTerrainProfile(descriptor, x, z, noiseConfig).surfaceY();
 				if (surfaceY <= this.minimumY) {
 					continue;
 				}
@@ -230,6 +238,17 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 	}
 
 	private BlockState pickTopMaterial(RegistryEntry<Biome> biome, BlockPos pos) {
+		if (biome.matchesKey(BiomeKeys.OCEAN)
+			|| biome.matchesKey(BiomeKeys.DEEP_OCEAN)
+			|| biome.matchesKey(BiomeKeys.LUKEWARM_OCEAN)
+			|| biome.matchesKey(BiomeKeys.DEEP_LUKEWARM_OCEAN)
+			|| biome.matchesKey(BiomeKeys.WARM_OCEAN)
+			|| biome.matchesKey(BiomeKeys.COLD_OCEAN)
+			|| biome.matchesKey(BiomeKeys.DEEP_COLD_OCEAN)
+			|| biome.matchesKey(BiomeKeys.FROZEN_OCEAN)
+			|| biome.matchesKey(BiomeKeys.DEEP_FROZEN_OCEAN)) {
+			return Blocks.SAND.getDefaultState();
+		}
 		if (biome.isIn(BiomeTags.IS_BADLANDS)) {
 			return Blocks.RED_SAND.getDefaultState();
 		}
@@ -246,6 +265,17 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 	}
 
 	private BlockState pickUnderMaterial(RegistryEntry<Biome> biome, BlockPos pos) {
+		if (biome.matchesKey(BiomeKeys.OCEAN)
+			|| biome.matchesKey(BiomeKeys.DEEP_OCEAN)
+			|| biome.matchesKey(BiomeKeys.LUKEWARM_OCEAN)
+			|| biome.matchesKey(BiomeKeys.DEEP_LUKEWARM_OCEAN)
+			|| biome.matchesKey(BiomeKeys.WARM_OCEAN)
+			|| biome.matchesKey(BiomeKeys.COLD_OCEAN)
+			|| biome.matchesKey(BiomeKeys.DEEP_COLD_OCEAN)
+			|| biome.matchesKey(BiomeKeys.FROZEN_OCEAN)
+			|| biome.matchesKey(BiomeKeys.DEEP_FROZEN_OCEAN)) {
+			return Blocks.SANDSTONE.getDefaultState();
+		}
 		if (biome.isIn(BiomeTags.IS_BADLANDS)) {
 			return Blocks.RED_SANDSTONE.getDefaultState();
 		}
@@ -347,23 +377,14 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 	@Override
 	public int getHeight(int x, int z, Heightmap.Type heightmap, HeightLimitView world, NoiseConfig noiseConfig) {
 		BiospheresSphereDescriptor descriptor = this.layout.resolve(x, z);
-		BlockPos center = descriptor.centerPos();
-		double radialDistance = Math.sqrt(center.getSquaredDistance(x, center.getY(), z));
-		if (radialDistance > descriptor.radius()) {
-			return this.minimumY;
-		}
-		double sphereHalfHeight = Math.sqrt((double) descriptor.radius() * descriptor.radius()
-			- (center.getX() - x) * (double) (center.getX() - x)
-			- (center.getZ() - z) * (double) (center.getZ() - z));
-		int topY = center.getY() + (int) sphereHalfHeight;
-		int bottomY = center.getY() - (int) sphereHalfHeight;
-		OctavePerlinNoiseSampler terrainNoise = this.getOrCreateHeightSampler(noiseConfig);
-		double columnNoise = terrainNoise.sample(x / 8.0D, 0.0D, z / 8.0D) / 8.0D;
-		int noiseSurfaceY = this.solveSolidSurfaceY(center.getY(), columnNoise);
-		if (noiseSurfaceY < bottomY) {
-			return this.minimumY;
-		}
-		return Math.min(topY, noiseSurfaceY);
+		int biomeSurfaceY = this.estimateBiomeSurfaceY(descriptor, x, z, noiseConfig);
+		return BiospheresChunkHeightModel.computeMaskedSurfaceY(descriptor, x, z, biomeSurfaceY, this.minimumY);
+	}
+
+	private boolean isInsideSphereMask(BiospheresSphereDescriptor sphere, int x, int z) {
+		double dx = sphere.centerX() - x;
+		double dz = sphere.centerZ() - z;
+		return dx * dx + dz * dz <= (double) sphere.radius() * sphere.radius();
 	}
 
 	private OctavePerlinNoiseSampler getOrCreateHeightSampler(NoiseConfig noiseConfig) {
@@ -385,19 +406,100 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 		}
 	}
 
-	private int solveSolidSurfaceY(int centerY, double columnNoise) {
-		double b = centerY * columnNoise;
-		double discriminant = b * b + 4.0D * centerY * centerY;
-		double root = (-b + Math.sqrt(discriminant)) / 2.0D;
-		return (int) Math.floor(root);
+	private int estimateBiomeSurfaceY(BiospheresSphereDescriptor sphere, int x, int z, NoiseConfig noiseConfig) {
+		return this.sampleTerrainProfile(sphere, x, z, noiseConfig).surfaceY();
+	}
+
+	private BiospheresTerrainProfile sampleTerrainProfile(BiospheresSphereDescriptor sphere, int x, int z, NoiseConfig noiseConfig) {
+		double reliefSignal = this.sampleReliefSignal(noiseConfig, x, z);
+		double valleySignal = this.sampleValleySignal(noiseConfig, x, z);
+		boolean lakeCapable = this.isLakeCapableColumn(noiseConfig, sphere);
+		BiospheresTerrainShaper.TerrainFamily family = this.resolveTerrainFamily(x, z, noiseConfig);
+		int[] columnBand = this.resolveSphereColumnBand(sphere, x, z);
+		return this.terrainShaper.shapeColumn(
+			sphere,
+			reliefSignal,
+			valleySignal,
+			lakeCapable,
+			family,
+			columnBand[0],
+			columnBand[1]
+		);
+	}
+
+	private int[] resolveSphereColumnBand(BiospheresSphereDescriptor sphere, int x, int z) {
+		double dx = sphere.centerX() - x;
+		double dz = sphere.centerZ() - z;
+		double radiusSquared = (double) sphere.radius() * sphere.radius();
+		double radialSquared = dx * dx + dz * dz;
+		if (radialSquared > radiusSquared) {
+			return new int[]{this.minimumY, this.minimumY};
+		}
+
+		double halfHeight = Math.sqrt(radiusSquared - radialSquared);
+		int bottomY = sphere.centerY() - (int) halfHeight;
+		int topY = sphere.centerY() + (int) halfHeight;
+		return new int[]{bottomY, topY};
+	}
+
+	private BiospheresTerrainShaper.TerrainFamily resolveTerrainFamily(int x, int z, NoiseConfig noiseConfig) {
+		RegistryEntry<Biome> biome = this.getBiomeSource().getBiome(
+			x >> 2,
+			0,
+			z >> 2,
+			noiseConfig.getMultiNoiseSampler()
+		);
+		if (biome.matchesKey(BiomeKeys.JAGGED_PEAKS)
+			|| biome.matchesKey(BiomeKeys.FROZEN_PEAKS)
+			|| biome.matchesKey(BiomeKeys.STONY_PEAKS)
+			|| biome.matchesKey(BiomeKeys.WINDSWEPT_HILLS)
+			|| biome.matchesKey(BiomeKeys.WINDSWEPT_GRAVELLY_HILLS)
+			|| biome.matchesKey(BiomeKeys.WINDSWEPT_FOREST)) {
+			return BiospheresTerrainShaper.TerrainFamily.MOUNTAIN;
+		}
+
+		if (biome.matchesKey(BiomeKeys.OCEAN)
+			|| biome.matchesKey(BiomeKeys.DEEP_OCEAN)
+			|| biome.matchesKey(BiomeKeys.LUKEWARM_OCEAN)
+			|| biome.matchesKey(BiomeKeys.DEEP_LUKEWARM_OCEAN)
+			|| biome.matchesKey(BiomeKeys.WARM_OCEAN)
+			|| biome.matchesKey(BiomeKeys.COLD_OCEAN)
+			|| biome.matchesKey(BiomeKeys.DEEP_COLD_OCEAN)
+			|| biome.matchesKey(BiomeKeys.FROZEN_OCEAN)
+			|| biome.matchesKey(BiomeKeys.DEEP_FROZEN_OCEAN)) {
+			return BiospheresTerrainShaper.TerrainFamily.OCEAN;
+		}
+
+		return BiospheresTerrainShaper.TerrainFamily.DEFAULT;
+	}
+
+	private double sampleReliefSignal(NoiseConfig noiseConfig, int x, int z) {
+		OctavePerlinNoiseSampler terrainNoise = this.getOrCreateHeightSampler(noiseConfig);
+		return terrainNoise.sample(x / 8.0D, 0.0D, z / 8.0D) / 8.0D;
+	}
+
+	private double sampleValleySignal(NoiseConfig noiseConfig, int x, int z) {
+		OctavePerlinNoiseSampler terrainNoise = this.getOrCreateHeightSampler(noiseConfig);
+		return terrainNoise.sample((x + 64.0D) / 8.0D, 0.0D, (z - 64.0D) / 8.0D) / 8.0D;
+	}
+
+	private boolean isLakeCapableColumn(NoiseConfig noiseConfig, BiospheresSphereDescriptor sphere) {
+		return !this.getLakeBlock(noiseConfig, sphere.centerPos()).isAir();
 	}
 
 	@Override
 	public VerticalBlockSample getColumnSample(int x, int z, HeightLimitView world, NoiseConfig noiseConfig) {
-		int topY = this.getHeight(x, z, Heightmap.Type.WORLD_SURFACE_WG, world, noiseConfig);
-		BlockState[] states = new BlockState[world.getHeight()];
+		BlockState[] states = BiospheresColumnStates.airFilled(world.getHeight());
+		BiospheresSphereDescriptor sphere = this.layout.resolve(x, z);
+		if (!this.isInsideSphereMask(sphere, x, z)) {
+			return new VerticalBlockSample(world.getBottomY(), states);
+		}
+
+		BiospheresTerrainProfile profile = this.sampleTerrainProfile(sphere, x, z, noiseConfig);
+		BlockState lakeState = this.getLakeBlock(noiseConfig, sphere.centerPos());
 		for (int y = 0; y < states.length; y++) {
-			states[y] = y + world.getBottomY() <= topY ? this.defaultBlock : Blocks.AIR.getDefaultState();
+			int worldY = y + world.getBottomY();
+			states[y] = this.getColumnBlockState(profile, worldY, lakeState);
 		}
 		return new VerticalBlockSample(world.getBottomY(), states);
 	}
@@ -410,10 +512,10 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 
 	private void finishBiospheres(StructureWorldAccess world, Chunk chunk, StructureAccessor structureAccessor) {
 		ChunkPos chunkPos = chunk.getPos();
-		BlockPos centerPos = this.getNearestSphereCenter(world.getSeed(), chunkPos.getCenterX(), chunkPos.getCenterZ());
+		BlockPos centerPos = this.getNearestSphereCenter(chunkPos.getCenterX(), chunkPos.getCenterZ());
 		BlockPos.Mutable current = new BlockPos.Mutable();
 		List<BridgeEntrance> bridgeEntrances = new ArrayList<>();
-		BlockPos[] closestSpheres = this.getClosestSpheres(world.getSeed(), centerPos);
+		BlockPos[] closestSpheres = this.getClosestSpheres(centerPos);
 		BiospheresSphereDescriptor centerDescriptor = this.layout.resolve(centerPos.getX(), centerPos.getZ());
 		List<BlockBox> protectedStructures = this.getProtectedStructureBoxes(chunk, structureAccessor);
 
@@ -458,7 +560,7 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 		this.clearBridgeEntrances(world, bridgeEntrances, current);
 	}
 
-	private BlockPos getNearestSphereCenter(long seed, int x, int z) {
+	private BlockPos getNearestSphereCenter(int x, int z) {
 		return this.layout.resolve(x, z).centerPos();
 	}
 
@@ -618,7 +720,7 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 		return false;
 	}
 
-	private BlockPos[] getClosestSpheres(long seed, BlockPos centerPos) {
+	private BlockPos[] getClosestSpheres(BlockPos centerPos) {
 		BlockPos[] nesw = new BlockPos[4];
 		for (int i = 0; i < 4; i++) {
 			int xMod = centerPos.getX();
@@ -628,7 +730,7 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 			} else {
 				zMod += (int) Math.round(Math.pow(-1, i) * this.sphereDistance);
 			}
-			nesw[i] = this.getNearestSphereCenter(seed, xMod, zMod);
+			nesw[i] = this.getNearestSphereCenter(xMod, zMod);
 		}
 		return nesw;
 	}
@@ -705,7 +807,11 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 				int widthZ = z + (stepX == 0 ? 0 : widthOffset);
 				for (int heightOffset = -1; heightOffset <= 3; heightOffset++) {
 					current.set(widthX, pos.getY() + heightOffset, widthZ);
-					if (world.getBlockState(current).isOf(Blocks.GLASS)) {
+					BlockState state = world.getBlockState(current);
+					if (heightOffset == -1 && state.isOf(this.defaultBridge.getBlock())) {
+						continue;
+					}
+					if (!state.isAir()) {
 						world.setBlockState(current, Blocks.AIR.getDefaultState(), 0);
 					}
 				}

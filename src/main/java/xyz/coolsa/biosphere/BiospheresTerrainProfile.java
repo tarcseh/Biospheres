@@ -1,24 +1,23 @@
 package xyz.coolsa.biosphere;
 
-public record BiospheresTerrainProfile(int centerX, int centerY, int centerZ, int radius) {
-	public boolean containsSolidAt(int x, int y, int z) {
-		return this.containsAt(x, y, z, this.radius);
-	}
-
-	public boolean containsLakeAt(int x, int y, int z) {
-		return this.containsAt(x, y, z, this.radius - 1);
-	}
-
-	private boolean containsAt(int x, int y, int z, int effectiveRadius) {
-		if (effectiveRadius < 0) {
-			return false;
+public record BiospheresTerrainProfile(int bottomY, int surfaceY, int ceilingY, int lakeFloorY, int lakeTopY, boolean hasLake) {
+	public BiospheresTerrainProfile {
+		if (bottomY > surfaceY) {
+			throw new IllegalArgumentException("bottomY must be <= surfaceY");
 		}
+		if (surfaceY > ceilingY) {
+			throw new IllegalArgumentException("surfaceY must be <= ceilingY");
+		}
+		if (hasLake && lakeFloorY > lakeTopY) {
+			throw new IllegalArgumentException("lakeFloorY must be <= lakeTopY when hasLake is true");
+		}
+	}
 
-		long dx = (long) x - this.centerX;
-		long dy = (long) y - this.centerY;
-		long dz = (long) z - this.centerZ;
-		long distanceSquared = dx * dx + dy * dy + dz * dz;
-		long radiusSquared = (long) effectiveRadius * effectiveRadius;
-		return distanceSquared <= radiusSquared;
+	public boolean containsSolidAt(int y) {
+		return y >= this.bottomY && y <= this.surfaceY;
+	}
+
+	public boolean containsLakeAt(int y) {
+		return this.hasLake && y >= this.lakeFloorY && y <= this.lakeTopY;
 	}
 }

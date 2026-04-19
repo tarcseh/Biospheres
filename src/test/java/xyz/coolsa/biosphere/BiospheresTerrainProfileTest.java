@@ -2,18 +2,28 @@ package xyz.coolsa.biosphere;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BiospheresTerrainProfileTest {
 
 	@Test
-	void detectsSolidAndLakeColumnsAroundTheProfileCenter() {
-		BiospheresTerrainProfile profile = new BiospheresTerrainProfile(10, 64, 20, 6);
+	void detectsSolidAndLakeBandsWithinTheProfile() {
+		BiospheresTerrainProfile profile = new BiospheresTerrainProfile(10, 18, 22, 12, 16, true);
 
-		assertTrue(profile.containsSolidAt(10, 64, 20));
-		assertTrue(profile.containsLakeAt(10, 64, 20));
-		assertFalse(profile.containsSolidAt(30, 64, 20));
-		assertFalse(profile.containsLakeAt(30, 64, 20));
+		assertEquals(10, profile.bottomY());
+		assertEquals(18, profile.surfaceY());
+		assertEquals(22, profile.ceilingY());
+		assertTrue(profile.containsSolidAt(10));
+		assertTrue(profile.containsLakeAt(14));
+		assertFalse(profile.containsSolidAt(9));
+		assertFalse(profile.containsLakeAt(17));
+	}
+
+	@Test
+	void rejectsImpossibleTerrainProfiles() {
+		assertThrows(IllegalArgumentException.class, () -> new BiospheresTerrainProfile(10, 9, 22, 12, 16, true));
 	}
 }
