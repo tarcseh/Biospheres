@@ -23,6 +23,7 @@ import net.minecraft.util.math.BlockBox;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.ChunkSectionPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.noise.OctavePerlinNoiseSampler;
 import net.minecraft.util.math.random.CheckedRandom;
 import net.minecraft.util.math.random.ChunkRandom;
@@ -163,8 +164,16 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 		return BiospheresSphereMath.isLavaLake(point) ? Blocks.LAVA.getDefaultState() : this.defaultFluid;
 	}
 
-	private BlockState getColumnBlockState(BiospheresTerrainProfile profile, int y, BlockState lakeState) {
+	private BlockState getColumnBlockState(
+		BiospheresTerrainProfile profile,
+		BiospheresTerrainShaper.TerrainFamily family,
+		int y,
+		BlockState lakeState
+	) {
 		if (profile.containsLakeAt(y)) {
+			if (family == BiospheresTerrainShaper.TerrainFamily.FROZEN_RIVER && y == profile.lakeTopY()) {
+				return Blocks.ICE.getDefaultState();
+			}
 			return lakeState.isAir() ? this.defaultFluid : lakeState;
 		}
 		if (profile.containsSolidAt(y)) {
@@ -190,10 +199,11 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 				}
 
 				BiospheresTerrainProfile profile = this.sampleTerrainProfile(descriptor, x, z, noiseConfig);
+				BiospheresTerrainShaper.TerrainFamily family = this.resolveTerrainFamily(x, z, noiseConfig);
 				BlockState lakeState = this.getLakeBlock(noiseConfig, descriptor.centerPos());
 
 				for (int y = profile.bottomY(); y <= profile.ceilingY(); y++) {
-					chunk.setBlockState(new BlockPos(x, y, z), this.getColumnBlockState(profile, y, lakeState), 0);
+					chunk.setBlockState(new BlockPos(x, y, z), this.getColumnBlockState(profile, family, y, lakeState), 0);
 				}
 			}
 		}
@@ -238,6 +248,12 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 	}
 
 	private BlockState pickTopMaterial(RegistryEntry<Biome> biome, BlockPos pos) {
+		if (biome.matchesKey(BiomeKeys.FROZEN_RIVER)) {
+			return Blocks.SNOW_BLOCK.getDefaultState();
+		}
+		if (biome.matchesKey(BiomeKeys.RIVER)) {
+			return Blocks.GRASS_BLOCK.getDefaultState();
+		}
 		if (biome.matchesKey(BiomeKeys.OCEAN)
 			|| biome.matchesKey(BiomeKeys.DEEP_OCEAN)
 			|| biome.matchesKey(BiomeKeys.LUKEWARM_OCEAN)
@@ -265,6 +281,12 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 	}
 
 	private BlockState pickUnderMaterial(RegistryEntry<Biome> biome, BlockPos pos) {
+		if (biome.matchesKey(BiomeKeys.RIVER)) {
+			return Blocks.DIRT.getDefaultState();
+		}
+		if (biome.matchesKey(BiomeKeys.FROZEN_RIVER)) {
+			return Blocks.DIRT.getDefaultState();
+		}
 		if (biome.matchesKey(BiomeKeys.OCEAN)
 			|| biome.matchesKey(BiomeKeys.DEEP_OCEAN)
 			|| biome.matchesKey(BiomeKeys.LUKEWARM_OCEAN)
@@ -319,6 +341,65 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 	public void generateFeatures(StructureWorldAccess world, Chunk chunk, StructureAccessor structureAccessor) {
 		super.generateFeatures(world, chunk, structureAccessor);
 		this.finishBiospheres(world, chunk, structureAccessor);
+		this.placeRiverSugarCane(world, chunk);
+	}
+
+	private void placeRiverSugarCane(StructureWorldAccess world, Chunk chunk) {
+		ChunkPos chunkPos = chunk.getPos();
+		BlockPos.Mutable groundPos = new BlockPos.Mutable();
+		BlockPos.Mutable abovePos = new BlockPos.Mutable();
+		int placed = 0;
+
+		for (int x = chunkPos.getStartX(); x <= chunkPos.getEndX() && placed < 2; x++) {
+			for (int z = chunkPos.getStartZ(); z <= chunkPos.getEndZ() && placed < 2; z++) {
+				int topY = chunk.sampleHeightmap(Heightmap.Type.WORLD_SURFACE_WG, x & 15, z & 15);
+				if (topY <= this.minimumY) {
+					continue;
+				}
+
+				groundPos.set(x, topY, z);
+				RegistryEntry<Biome> biome = world.getBiome(groundPos);
+				if (!biome.matchesKey(BiomeKeys.RIVER)) {
+					continue;
+				}
+
+				BlockState groundState = world.getBlockState(groundPos);
+				if (!this.isSugarCaneGround(groundState)) {
+					continue;
+				}
+
+				if (!this.hasAdjacentWater(world, groundPos)) {
+					continue;
+				}
+
+				abovePos.set(x, topY + 1, z);
+				if (!world.getBlockState(abovePos).isAir()) {
+					continue;
+				}
+
+				world.setBlockState(abovePos, Blocks.SUGAR_CANE.getDefaultState(), 0);
+				placed++;
+			}
+		}
+	}
+
+	private boolean isSugarCaneGround(BlockState state) {
+		return state.isOf(Blocks.GRASS_BLOCK)
+			|| state.isOf(Blocks.DIRT)
+			|| state.isOf(Blocks.COARSE_DIRT)
+			|| state.isOf(Blocks.PODZOL)
+			|| state.isOf(Blocks.SAND)
+			|| state.isOf(Blocks.RED_SAND);
+	}
+
+	private boolean hasAdjacentWater(StructureWorldAccess world, BlockPos groundPos) {
+		for (Direction direction : Direction.Type.HORIZONTAL) {
+			BlockPos neighbor = groundPos.offset(direction);
+			if (world.getBlockState(neighbor).isOf(Blocks.WATER)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	@Override
@@ -413,6 +494,7 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 	private BiospheresTerrainProfile sampleTerrainProfile(BiospheresSphereDescriptor sphere, int x, int z, NoiseConfig noiseConfig) {
 		double reliefSignal = this.sampleReliefSignal(noiseConfig, x, z);
 		double valleySignal = this.sampleValleySignal(noiseConfig, x, z);
+		double riverSignal = this.sampleRiverSignal(noiseConfig, x, z);
 		boolean lakeCapable = this.isLakeCapableColumn(noiseConfig, sphere);
 		BiospheresTerrainShaper.TerrainFamily family = this.resolveTerrainFamily(x, z, noiseConfig);
 		int[] columnBand = this.resolveSphereColumnBand(sphere, x, z);
@@ -420,6 +502,7 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 			sphere,
 			reliefSignal,
 			valleySignal,
+			riverSignal,
 			lakeCapable,
 			family,
 			columnBand[0],
@@ -470,6 +553,14 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 			return BiospheresTerrainShaper.TerrainFamily.OCEAN;
 		}
 
+		if (biome.matchesKey(BiomeKeys.FROZEN_RIVER)) {
+			return BiospheresTerrainShaper.TerrainFamily.FROZEN_RIVER;
+		}
+
+		if (biome.matchesKey(BiomeKeys.RIVER)) {
+			return BiospheresTerrainShaper.TerrainFamily.RIVER;
+		}
+
 		return BiospheresTerrainShaper.TerrainFamily.DEFAULT;
 	}
 
@@ -481,6 +572,11 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 	private double sampleValleySignal(NoiseConfig noiseConfig, int x, int z) {
 		OctavePerlinNoiseSampler terrainNoise = this.getOrCreateHeightSampler(noiseConfig);
 		return terrainNoise.sample((x + 64.0D) / 8.0D, 0.0D, (z - 64.0D) / 8.0D) / 8.0D;
+	}
+
+	private double sampleRiverSignal(NoiseConfig noiseConfig, int x, int z) {
+		OctavePerlinNoiseSampler terrainNoise = this.getOrCreateHeightSampler(noiseConfig);
+		return terrainNoise.sample((x - 96.0D) / 12.0D, 0.0D, (z + 96.0D) / 12.0D) / 1.2D;
 	}
 
 	private boolean isLakeCapableColumn(NoiseConfig noiseConfig, BiospheresSphereDescriptor sphere) {
@@ -496,10 +592,11 @@ public final class BiospheresChunkGenerator extends ChunkGenerator {
 		}
 
 		BiospheresTerrainProfile profile = this.sampleTerrainProfile(sphere, x, z, noiseConfig);
+		BiospheresTerrainShaper.TerrainFamily family = this.resolveTerrainFamily(x, z, noiseConfig);
 		BlockState lakeState = this.getLakeBlock(noiseConfig, sphere.centerPos());
 		for (int y = 0; y < states.length; y++) {
 			int worldY = y + world.getBottomY();
-			states[y] = this.getColumnBlockState(profile, worldY, lakeState);
+			states[y] = this.getColumnBlockState(profile, family, worldY, lakeState);
 		}
 		return new VerticalBlockSample(world.getBottomY(), states);
 	}
