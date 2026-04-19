@@ -55,10 +55,16 @@ public final class BiospheresTerrainShaper {
 				bottomY,
 				ceilingY
 			);
+			double islandSignal = reliefSignal - Math.max(0.0D, -valleySignal) * 0.35D;
+			if (islandSignal > 0.34D) {
+				int islandBoost = 2 + (int) Math.round((islandSignal - 0.34D) * sphere.radius() * 0.7D);
+				surfaceY = clamp(surfaceY + islandBoost, bottomY, ceilingY);
+			}
 			hasLake = surfaceY <= waterlineY;
 			if (hasLake) {
 				lakeTopY = clamp(waterlineY, bottomY, ceilingY);
 				lakeFloorY = clamp(surfaceY + 1, bottomY, lakeTopY);
+				surfaceY = Math.max(surfaceY, lakeFloorY);
 				if (lakeTopY < lakeFloorY) {
 					hasLake = false;
 					lakeTopY = bottomY;
@@ -73,6 +79,9 @@ public final class BiospheresTerrainShaper {
 			hasLake = lakeCapable && valleySignal < lakeThreshold;
 			lakeTopY = hasLake ? clamp(surfaceY - (family == TerrainFamily.MOUNTAIN ? 4 : 3), bottomY, surfaceY) : bottomY;
 			lakeFloorY = hasLake ? clamp(lakeTopY - Math.max(2, sphere.lakeRadius() / 3), bottomY, lakeTopY) : bottomY;
+			if (hasLake) {
+				surfaceY = Math.max(surfaceY, lakeFloorY);
+			}
 		}
 
 		return new BiospheresTerrainProfile(bottomY, surfaceY, ceilingY, lakeFloorY, lakeTopY, hasLake);
