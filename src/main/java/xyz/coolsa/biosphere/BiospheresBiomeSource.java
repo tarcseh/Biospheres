@@ -9,7 +9,6 @@ import net.minecraft.registry.entry.RegistryFixedCodec;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.util.Identifier;
 import net.minecraft.world.biome.Biome;
-import net.minecraft.world.biome.BiomeKeys;
 import net.minecraft.world.biome.source.BiomeSource;
 import net.minecraft.world.biome.source.util.MultiNoiseUtil;
 
@@ -81,7 +80,6 @@ public final class BiospheresBiomeSource extends BiomeSource {
 	private final int sphereDistance;
 	private final int minSphereRadius;
 	private final int maxSphereRadius;
-	private final RegistryEntry<Biome> deepDarkBiome;
 
 	public BiospheresBiomeSource(List<RegistryEntry<Biome>> biomes, RegistryEntry<Biome> voidBiome, int sphereDistance, int minSphereRadius, int maxSphereRadius) {
 		this.biomes = List.copyOf(biomes);
@@ -89,10 +87,6 @@ public final class BiospheresBiomeSource extends BiomeSource {
 		this.sphereDistance = sphereDistance;
 		this.minSphereRadius = minSphereRadius;
 		this.maxSphereRadius = maxSphereRadius;
-		this.deepDarkBiome = this.biomes.stream()
-			.filter(entry -> entry.matchesKey(BiomeKeys.DEEP_DARK))
-			.findFirst()
-			.orElse(null);
 	}
 
 	@Override
@@ -115,15 +109,7 @@ public final class BiospheresBiomeSource extends BiomeSource {
 		int centerZ = BiospheresSphereMath.nearestCenter(z * 4, this.sphereDistance);
 		MultiNoiseUtil.NoiseValuePoint spherePoint = noise.sample(centerX >> 2, 0, centerZ >> 2);
 		int sphereIndex = this.pickSphereIndex(spherePoint, centerX, centerZ, this.biomes.size());
-		if (this.deepDarkBiome != null && this.isDeepDarkSphere(spherePoint, centerX, centerZ)) {
-			return this.deepDarkBiome;
-		}
-
 		return this.biomes.get(sphereIndex);
-	}
-
-	private boolean isDeepDarkSphere(MultiNoiseUtil.NoiseValuePoint spherePoint, int centerX, int centerZ) {
-		return this.pickSphereIndex(spherePoint, centerX, centerZ, 13) == 0;
 	}
 
 	private int pickSphereIndex(MultiNoiseUtil.NoiseValuePoint spherePoint, int centerX, int centerZ, int count) {
